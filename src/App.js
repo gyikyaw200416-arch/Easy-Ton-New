@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+Import React, { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 // --- CONFIGURATION ---
@@ -100,6 +100,7 @@ function App() {
   }, [fetchAllData]);
 
   const handleWatchAds = async () => {
+    // Check VIP status from the current user state
     const reward = user.is_vip ? 0.0008 : 0.0003;
     const newBalance = user.balance + reward;
     await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
@@ -116,14 +117,11 @@ function App() {
     const randomIndex = Math.floor(Math.random() * spinOptions.length);
     const segmentAngle = 360 / spinOptions.length;
     
-    // logic: extra spins + target position
-    const extraSpins = 3600; 
+    // Logic: Calculate rotation to land exactly on the slice under the arrow
+    const extraSpins = 3600; // 10 full rotations
     const currentRotationBase = spinRotation - (spinRotation % 360);
-    
-    // To select the color to the LEFT of the arrow:
-    // We add half a segment (segmentAngle / 2) to ensure the wheel stops 
-    // where the arrow points precisely into the center of the target slice.
-    const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle)) - (segmentAngle / 2) - 90;
+    // formula: base + extra + (360 - offset) to bring selected index to top (0 deg)
+    const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle));
     
     setSpinRotation(finalRotation);
 
@@ -188,6 +186,7 @@ function App() {
     if (!error) {
         alert("User Data Updated! ✅");
         setSearchedUser(prev => ({ ...prev, ...updatedFields }));
+        // If current user is the one being edited, update state immediately
         if (targetId === user.id) {
             setUser(prev => ({ ...prev, ...updatedFields }));
         }
