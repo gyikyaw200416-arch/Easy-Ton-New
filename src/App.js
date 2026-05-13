@@ -116,19 +116,17 @@ function App() {
     const randomIndex = Math.floor(Math.random() * spinOptions.length);
     const segmentAngle = 360 / spinOptions.length;
     
-    // CALCULATING ROTATION:
-    // 1. ExtraSpins: 10 full rotations for effect.
-    // 2. (360 - (randomIndex * segmentAngle)): Centers the selected slice.
-    // 3. -90: Adjusts because the CSS arrow is at 12 o'clock (0 degrees starts at 3 o'clock).
-    const extraSpins = 3600; 
+    const extraSpins = 3600; // 10 full rotations
     const currentRotationBase = spinRotation - (spinRotation % 360);
+    
+    // ADJUSTMENT: Arrow is at the top (-90 degrees offset from the standard 0 start)
     const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle)) - 90;
     
     setSpinRotation(finalRotation);
 
     setTimeout(async () => {
       const winner = spinOptions[randomIndex];
-      const newBalance = Number((user.balance + winner.amt).toFixed(7));
+      const newBalance = user.balance + winner.amt;
       const now = Date.now();
       
       const { error } = await supabase.from('users').update({ 
