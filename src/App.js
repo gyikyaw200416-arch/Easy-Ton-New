@@ -39,6 +39,7 @@ function App() {
   const [spinRotation, setSpinRotation] = useState(0); 
   const [timeLeft, setTimeLeft] = useState(0);
 
+  // Admin States
   const [targetId, setTargetId] = useState('');
   const [searchedUser, setSearchedUser] = useState(null);
   const [userWithdraws, setUserWithdraws] = useState([]);
@@ -50,9 +51,11 @@ function App() {
   const [adminPromoCode, setAdminPromoCode] = useState('');
   const [adminPromoValue, setAdminPromoValue] = useState('');
 
-  // --- UPDATED AD ENGINE (Direct Redirect) ---
+  // --- ENFORCED AD STATES ---
   const [isAdWatching, setIsAdWatching] = useState(false);
+  const [adTimer, setAdTimer] = useState(0);
   const [pendingAction, setPendingAction] = useState(null);
+  const currentAdUrl = useRef(AD_LINKS[0]);
 
   const spinOptions = [
     { amt: 0.00009, color: '#007AFF', label: 'Blue' },   
@@ -104,31 +107,39 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // Handle Ad Redirect with Overlay
-  const triggerAd = (callback) => {
+  // --- AD ENGINE (FORCED REDIRECT) ---
+  const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) {
       callback();
       return;
     }
     const randomAd = AD_LINKS[Math.floor(Math.random() * AD_LINKS.length)];
+    currentAdUrl.current = randomAd;
     setIsAdWatching(true);
+    setAdTimer(duration);
     setPendingAction(() => callback);
     window.open(randomAd, '_blank');
   };
 
-  const completeAdTask = () => {
-    setIsAdWatching(false);
-    if (pendingAction) {
+  useEffect(() => {
+    let timer;
+    if (isAdWatching && adTimer > 0) {
+      timer = setInterval(() => setAdTimer(prev => prev - 1), 1000);
+    } else if (adTimer === 0 && isAdWatching) {
+      setIsAdWatching(false);
+      if (pendingAction) {
         pendingAction();
         setPendingAction(null);
+      }
     }
-  };
+    return () => clearInterval(timer);
+  }, [isAdWatching, adTimer, pendingAction]);
 
-  const changeTab = (tab) => triggerAd(() => setMainTab(tab));
-  const changeSubTab = (tab) => triggerAd(() => setSubTab(tab));
+  const changeTab = (tab) => triggerAd(15, () => setMainTab(tab));
+  const changeSubTab = (tab) => triggerAd(15, () => setSubTab(tab));
 
   const handleWatchAds = () => {
-    triggerAd(async () => {
+    triggerAd(30, async () => {
       const reward = user.is_vip ? 0.0008 : 0.0003;
       const newBalance = user.balance + reward;
       const { error } = await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
@@ -144,7 +155,7 @@ function App() {
     if (user.id !== ADMIN_ID && timeLeft > 0) return alert("Please wait for the 2-hour cooldown!");
     if (isSpinning) return;
 
-    triggerAd(async () => {
+    triggerAd(20, async () => {
         setIsSpinning(true);
         const randomIndex = Math.floor(Math.random() * spinOptions.length);
         const segmentAngle = 360 / spinOptions.length;
@@ -169,7 +180,7 @@ function App() {
   };
 
   const handleRedeemPromo = () => {
-    triggerAd(async () => {
+    triggerAd(20, async () => {
         const { data: promo } = await supabase.from('promo_codes').select('*').eq('code', promoCodeInput).single();
         if (!promo) return alert("Invalid Reward Code!");
         if (promo.used_by?.includes(user.id)) return alert("Code already used!");
@@ -187,7 +198,7 @@ function App() {
 
   const handleStartTask = async (task) => {
     window.open(task.link, '_blank');
-    triggerAd(async () => {
+    triggerAd(20, async () => {
         if (!user.completed_tasks?.includes(task.id)) {
             const updatedTasks = [...(user.completed_tasks || []), task.id];
             const newBalance = user.balance + 0.001;
@@ -200,7 +211,7 @@ function App() {
   };
 
   const handleWithdraw = () => {
-    triggerAd(async () => {
+    triggerAd(25, async () => {
         const amt = Number(withdrawAmt);
         if (amt < 0.1) return alert("Minimum 0.1 TON");
         if (amt > user.balance) return alert("Insufficient Balance!");
@@ -263,17 +274,20 @@ function App() {
 
   return (
     <div style={styles.container}>
-      {/* AD OVERLAY (NO TIMER - DIRECT REDIRECT) */}
+      {/* AD OVERLAY ENFORCEMENT */}
       {isAdWatching && (
         <div style={styles.adOverlay}>
-          <h2 style={{color: '#facc15'}}>ADVERTISING PROTECTION</h2>
-          <p style={{fontSize: 14}}>Please watch the advertisement completely to unlock this section.</p>
-          <div style={{margin: '30px 0'}}>
-             <div className="spinner" style={{width:50, height:50, border:'5px solid #fff', borderTopColor:'#facc15', borderRadius:'50%', animation:'spin 1s linear infinite'}}></div>
+          <h2 style={{color: '#facc15'}}>ADVERTISING LOADING</h2>
+          <p>Please watch the advertisement until the end...</p>
+          <div style={{position: 'relative', margin: '25px 0'}}>
+            <svg width="120" height="120">
+                <circle cx="60" cy="60" r="50" fill="none" stroke="#333" strokeWidth="8" />
+                <circle cx="60" cy="60" r="50" fill="none" stroke="#facc15" strokeWidth="8" strokeDasharray="314" strokeDashoffset={314 - (314 * (adTimer / 30))} style={{transition: 'stroke-dashoffset 1s linear'}} />
+            </svg>
+            <div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: 28, fontWeight: 'bold'}}>{adTimer}</div>
           </div>
-          <button onClick={() => window.open(AD_LINKS[0], '_blank')} style={{...styles.btn, background: '#facc15', color: '#000', marginBottom: 15, width: '80%'}}>BACK TO AD</button>
-          <button onClick={completeAdTask} style={{background:'none', color:'#fff', border:'1px solid #fff', padding:'10px 20px', borderRadius:10, fontSize:12}}>I've Finished Watching</button>
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          <p style={{fontSize: 13, color: '#ff4b2b', fontWeight: 'bold'}}>WARNING: DO NOT CLOSE THE ADS PAGE!</p>
+          <button onClick={() => window.open(currentAdUrl.current, '_blank')} style={{...styles.btn, background: '#facc15', color: '#000', marginTop: 25, width: '80%'}}>RETURN TO ADVERTISEMENT</button>
         </div>
       )}
 
