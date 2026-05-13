@@ -115,13 +115,12 @@ function App() {
     setIsSpinning(true);
     const randomIndex = Math.floor(Math.random() * spinOptions.length);
     const segmentAngle = 360 / spinOptions.length;
-    const extraSpins = 3600; // 10 full rotations
-
-    /**
-     * LOGIC FIX:
-     * To align the selected segment with the TOP ARROW (12 o'clock),
-     * we subtract 90 degrees from the final target rotation.
-     */
+    
+    // CALCULATING ROTATION:
+    // 1. ExtraSpins: 10 full rotations for effect.
+    // 2. (360 - (randomIndex * segmentAngle)): Centers the selected slice.
+    // 3. -90: Adjusts because the CSS arrow is at 12 o'clock (0 degrees starts at 3 o'clock).
+    const extraSpins = 3600; 
     const currentRotationBase = spinRotation - (spinRotation % 360);
     const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle)) - 90;
     
@@ -129,7 +128,6 @@ function App() {
 
     setTimeout(async () => {
       const winner = spinOptions[randomIndex];
-      // Use toFixed to avoid floating point math issues
       const newBalance = Number((user.balance + winner.amt).toFixed(7));
       const now = Date.now();
       
