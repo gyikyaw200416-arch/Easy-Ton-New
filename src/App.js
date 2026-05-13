@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
+// --- CONFIGURATION ---
 const tg = window.Telegram?.WebApp;
 const supabase = createClient(
   "https://bysgzzqyubtgvdghldec.supabase.co", 
@@ -9,22 +10,34 @@ const supabase = createClient(
 const ADMIN_ID = "1793453606"; 
 
 function App() {
+  // Core States
   const [mainTab, setMainTab] = useState('earn');
   const [subTab, setSubTab] = useState('bot');
-  const [user, setUser] = useState({ id: tg?.initDataUnsafe?.user?.id?.toString() || "1793453606", balance: 0, is_vip: false, completed_tasks: [], last_spin: 0 });
+  const [user, setUser] = useState({ 
+    id: tg?.initDataUnsafe?.user?.id?.toString() || "1793453606", 
+    balance: 0, 
+    is_vip: false, 
+    completed_tasks: [], 
+    last_spin: 0 
+  });
+  
   const [tasks, setTasks] = useState([]);
   const [withdraws, setWithdraws] = useState([]);
   const [invites, setInvites] = useState([]);
   const [rankList, setRankList] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Transaction States
   const [withdrawAddr, setWithdrawAddr] = useState('');
   const [withdrawAmt, setWithdrawAmt] = useState('');
   const [promoCodeInput, setPromoCodeInput] = useState('');
+  
+  // Spin States
   const [isSpinning, setIsSpinning] = useState(false);
   const [spinRotation, setSpinRotation] = useState(0); 
   const [timeLeft, setTimeLeft] = useState(0);
 
+  // Admin States
   const [targetId, setTargetId] = useState('');
   const [searchedUser, setSearchedUser] = useState(null);
   const [userWithdraws, setUserWithdraws] = useState([]);
@@ -61,6 +74,7 @@ function App() {
     }
     setUser(uData);
     
+    // Cooldown Logic
     const waitTime = 2 * 60 * 60 * 1000; 
     const diff = waitTime - (Date.now() - (uData.last_spin || 0));
     setTimeLeft(diff > 0 ? diff : 0);
@@ -96,7 +110,6 @@ function App() {
   };
 
   const handleSpin = async () => {
-    // Admin check: Admin can spin anytime
     if (user.id !== ADMIN_ID && timeLeft > 0) return alert("Please wait for the 2-hour cooldown!");
     if (isSpinning) return;
 
@@ -104,9 +117,11 @@ function App() {
     const randomIndex = Math.floor(Math.random() * spinOptions.length);
     const segmentAngle = 360 / spinOptions.length;
     
+    // Spinning Animation Logic (Land precisely on the slice)
     const extraSpins = 3600; 
     const currentRotationBase = spinRotation - (spinRotation % 360);
-    const finalRotation = currentRotationBase + extraSpins - (randomIndex * segmentAngle);
+    // Adjusting to stop at 12 o'clock (0 degrees)
+    const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle));
     
     setSpinRotation(finalRotation);
 
@@ -245,12 +260,14 @@ function App() {
 
   return (
     <div style={styles.container}>
+      {/* Header / Balance */}
       <div style={{background:'#000', color:'#fff', padding:20, borderRadius:20, textAlign:'center', marginBottom:15, border: '2px solid #fff'}}>
          <small style={{opacity:0.7}}>MY TOTAL BALANCE</small>
          <h1 style={{margin:'5px 0', fontSize:32}}>{user.balance.toFixed(5)} TON</h1>
          {user.is_vip && <span style={{color:'#facc15', fontSize:12, fontWeight:'bold'}}>⭐ VIP MEMBER</span>}
       </div>
 
+      {/* Ads Earning Logic Display */}
       <div style={styles.watchText}>
         <span style={{ color: !user.is_vip ? '#28a745' : '#888' }}>Standard: 0.0003</span> | 
         <span style={{ color: user.is_vip ? '#28a745' : '#888' }}> VIP: 0.0008</span>
@@ -260,6 +277,7 @@ function App() {
         📺 WATCH ADS & EARN
       </button>
 
+      {/* Earn Sub-Tabs */}
       {mainTab === 'earn' && (
         <div style={{display:'flex', gap:5, marginBottom:15}}>
           {['bot', 'social', 'reward', 'admin'].map(tab => (
@@ -271,6 +289,7 @@ function App() {
         </div>
       )}
 
+      {/* Main Content Area */}
       <div style={{minHeight:'45vh'}}>
         {mainTab === 'earn' && (
           subTab === 'reward' ? (
@@ -287,6 +306,7 @@ function App() {
                 <button onClick={handleSpin} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#00d2ff'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
                   {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'SPIN NOW'}
                 </button>
+                
                 <div style={{textAlign:'left', marginTop:20, fontSize:11, display:'grid', gridTemplateColumns:'1fr 1fr'}}>
                   {spinOptions.map((o,i) => (
                     <div key={i} style={{marginBottom:4}}>
@@ -432,13 +452,14 @@ function App() {
             <div style={{textAlign:'left', marginBottom:20, background: '#f9f9f9', padding: 15, borderRadius: 10}}>
                 <p><b>ID:</b> {user.id}</p>
                 <p><b>Balance:</b> {user.balance.toFixed(5)} TON</p>
-                <p><b>Status:</b> {user.is_vip ? <span style={{color: '#facc15', fontWeight: 'bold'}}>VIP ⭐</span> : "Standard User"}</p>
+                <p><b>Status:</b> {user.is_vip ? <span style={{color: '#28a745', fontWeight: 'bold'}}>VIP ⭐</span> : "Standard User"}</p>
             </div>
             <button onClick={()=>window.open("https://t.me/EasyTonHelp_Bot")} style={{...styles.btn, width:'100%', background:'#0088cc'}}>SUPPORT</button>
           </div>
         )}
       </div>
 
+      {/* Bottom Nav */}
       <div style={styles.bottomNav}>
         <div onClick={()=>setMainTab('earn')} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
         <div onClick={()=>setMainTab('invite')} style={styles.navItem(mainTab==='invite')}>👥<br/>INVITE</div>
