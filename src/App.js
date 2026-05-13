@@ -100,7 +100,6 @@ function App() {
   }, [fetchAllData]);
 
   const handleWatchAds = async () => {
-    // Check VIP status from the current user state
     const reward = user.is_vip ? 0.0008 : 0.0003;
     const newBalance = user.balance + reward;
     await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
@@ -116,18 +115,22 @@ function App() {
     setIsSpinning(true);
     const randomIndex = Math.floor(Math.random() * spinOptions.length);
     const segmentAngle = 360 / spinOptions.length;
-    
-    // Logic: Calculate rotation to land exactly on the slice under the arrow
     const extraSpins = 3600; // 10 full rotations
+
+    /**
+     * LOGIC FIX:
+     * To align the selected segment with the TOP ARROW (12 o'clock),
+     * we subtract 90 degrees from the final target rotation.
+     */
     const currentRotationBase = spinRotation - (spinRotation % 360);
-    // formula: base + extra + (360 - offset) to bring selected index to top (0 deg)
-    const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle));
+    const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle)) - 90;
     
     setSpinRotation(finalRotation);
 
     setTimeout(async () => {
       const winner = spinOptions[randomIndex];
-      const newBalance = user.balance + winner.amt;
+      // Use toFixed to avoid floating point math issues
+      const newBalance = Number((user.balance + winner.amt).toFixed(7));
       const now = Date.now();
       
       const { error } = await supabase.from('users').update({ 
@@ -186,7 +189,6 @@ function App() {
     if (!error) {
         alert("User Data Updated! ✅");
         setSearchedUser(prev => ({ ...prev, ...updatedFields }));
-        // If current user is the one being edited, update state immediately
         if (targetId === user.id) {
             setUser(prev => ({ ...prev, ...updatedFields }));
         }
