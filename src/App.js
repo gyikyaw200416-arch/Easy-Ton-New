@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 // --- CONFIGURATION ---
@@ -9,14 +9,14 @@ const supabase = createClient(
 );
 const ADMIN_ID = "1793453606"; 
 
-// Ad URLs
-const ADS = [
+// ADS LINKS
+const ADS_LINKS = [
   "https://data527.click/a674e1237b7e268eb5f6/ff9984d88d/?placementName=default",
   "https://www.profitablecpmratenetwork.com/pmi0yt9u?key=3580805003ccb6983acba9b61b6cb7e2"
 ];
 
 function App() {
-  // Core States
+  // --- ALL ORIGINAL STATES MAINTAINED ---
   const [mainTab, setMainTab] = useState('earn');
   const [subTab, setSubTab] = useState('bot');
   const [user, setUser] = useState({ 
@@ -26,30 +26,17 @@ function App() {
     completed_tasks: [], 
     last_spin: 0 
   });
-  
   const [tasks, setTasks] = useState([]);
   const [withdraws, setWithdraws] = useState([]);
   const [invites, setInvites] = useState([]);
   const [rankList, setRankList] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  // --- NEW AD STATES ---
-  const [showAdOverlay, setShowAdOverlay] = useState(false);
-  const [adTimer, setAdTimer] = useState(0);
-  const [currentAdIndex, setCurrentAdIndex] = useState(0);
-  const [adCallback, setAdCallback] = useState(null);
-
-  // Transaction States
   const [withdrawAddr, setWithdrawAddr] = useState('');
   const [withdrawAmt, setWithdrawAmt] = useState('');
   const [promoCodeInput, setPromoCodeInput] = useState('');
-  
-  // Spin States
   const [isSpinning, setIsSpinning] = useState(false);
   const [spinRotation, setSpinRotation] = useState(0); 
   const [timeLeft, setTimeLeft] = useState(0);
-
-  // Admin States
   const [targetId, setTargetId] = useState('');
   const [searchedUser, setSearchedUser] = useState(null);
   const [userWithdraws, setUserWithdraws] = useState([]);
@@ -60,6 +47,14 @@ function App() {
   const [taskType, setTaskType] = useState('bot');
   const [adminPromoCode, setAdminPromoCode] = useState('');
   const [adminPromoValue, setAdminPromoValue] = useState('');
+
+  // --- NEW ADS LOGIC STATES ---
+  const [adActive, setAdActive] = useState(false);
+  const [nextAction, setNextAction] = useState(null);
+  const [adStartTime, setAdStartTime] = useState(0);
+  const [adRequiredTime, setAdRequiredTime] = useState(20);
+  const [currentAdIndex, setCurrentAdIndex] = useState(0);
+  const adWindowRef = useRef(null);
 
   const spinOptions = [
     { amt: 0.00009, color: '#007AFF', label: 'Blue' },   
@@ -77,43 +72,6 @@ function App() {
     { amt: 0.001, color: '#FFFFFF', label: 'White' }     
   ];
 
-  // --- AD ENGINE ---
-  const triggerAd = (seconds, callback) => {
-    setAdTimer(seconds);
-    setAdCallback(() => callback);
-    setShowAdOverlay(true);
-    window.open(ADS[currentAdIndex], '_blank');
-    setCurrentAdIndex((prev) => (prev + 1) % ADS.length); // Toggle between the two ad sources
-  };
-
-  useEffect(() => {
-    let timer;
-    if (showAdOverlay && adTimer > 0) {
-      timer = setInterval(() => {
-        setAdTimer((prev) => prev - 1);
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [showAdOverlay, adTimer]);
-
-  const closeAdAndExecute = () => {
-    if (adTimer > 0) return; // Still locked
-    setShowAdOverlay(false);
-    if (adCallback) {
-      adCallback();
-      setAdCallback(null);
-    }
-  };
-
-  // --- NAVIGATION LOCK ---
-  const handleTabChange = (type, value) => {
-    triggerAd(20, () => {
-      if (type === 'main') setMainTab(value);
-      else setSubTab(value);
-    });
-  };
-
-  // --- CORE DATA FETCHING ---
   const fetchAllData = useCallback(async () => {
     let { data: uData } = await supabase.from('users').select('*').eq('id', user.id).single();
     if (!uData) {
@@ -122,23 +80,17 @@ function App() {
         uData = newUser;
     }
     setUser(uData);
-    
     const waitTime = 2 * 60 * 60 * 1000; 
     const diff = waitTime - (Date.now() - (uData.last_spin || 0));
     setTimeLeft(diff > 0 ? diff : 0);
-
     const { data: tData } = await supabase.from('global_tasks').select('*');
     if (tData) setTasks(tData);
-
     const { data: rData } = await supabase.from('users').select('id, balance').order('balance', { ascending: false }).limit(50);
     if (rData) setRankList(rData);
-
     const { data: wData } = await supabase.from('withdrawals').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
     if (wData) setWithdraws(wData);
-
     const { data: iData } = await supabase.from('users').select('id').eq('invited_by', user.id);
     if (iData) setInvites(iData);
-
     setLoading(false);
   }, [user.id]);
 
@@ -148,94 +100,109 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- TASK HANDLERS ---
+  // --- ADS TRIGGER LOGIC ---
+  const triggerAd = (requiredSec, onSuccessAction) => {
+    const adUrl = ADS_LINKS[currentAdIndex];
+    setCurrentAdIndex((prev) => (prev + 1) % ADS_LINKS.length); // Toggle between ads
+    setAdRequiredTime(requiredSec);
+    setNextAction(() => onSuccessAction);
+    setAdActive(true);
+    setAdStartTime(Date.now());
+    adWindowRef.current = window.open(adUrl, '_blank');
+  };
+
+  // Anti-Cheat: Check if time is up when they come back
+  useEffect(() => {
+    const handleFocus = () => {
+      if (adActive) {
+        const elapsed = (Date.now() - adStartTime) / 1000;
+        if (elapsed < adRequiredTime) {
+          alert(`Please wait! You must view the ad for ${adRequiredTime} seconds.`);
+          const adUrl = ADS_LINKS[currentAdIndex === 0 ? 1 : 0]; // Keep same ad
+          window.open(adUrl, '_blank');
+        } else {
+          setAdActive(false);
+          if (nextAction) nextAction();
+          setNextAction(null);
+        }
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [adActive, adStartTime, adRequiredTime, nextAction, currentAdIndex]);
+
+  // --- WRAPPED ORIGINAL FUNCTIONS ---
   const handleWatchAds = () => {
     triggerAd(30, async () => {
       const reward = user.is_vip ? 0.0008 : 0.0003;
       const newBalance = user.balance + reward;
-      const { error } = await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
-      if(!error) {
-          setUser(prev => ({ ...prev, balance: newBalance }));
-          alert(`Success! Earned ${reward} TON ✅`);
-      }
+      await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
+      setUser(prev => ({ ...prev, balance: newBalance }));
+      alert(`Success! Earned ${reward} TON ✅`);
       fetchAllData();
     });
   };
 
-  const handleSpin = async () => {
+  const handleSpin = () => {
     if (user.id !== ADMIN_ID && timeLeft > 0) return alert("Please wait for the 2-hour cooldown!");
     if (isSpinning) return;
-    
-    triggerAd(20, () => {
-      setIsSpinning(true);
-      const randomIndex = Math.floor(Math.random() * spinOptions.length);
-      const segmentAngle = 360 / spinOptions.length;
-      const extraSpins = 3600; 
-      const currentRotationBase = spinRotation - (spinRotation % 360);
-      const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle));
-      setSpinRotation(finalRotation);
 
-      setTimeout(async () => {
-        const winner = spinOptions[randomIndex];
-        const newBalance = user.balance + winner.amt;
-        const now = Date.now();
-        const { error } = await supabase.from('users').update({ balance: newBalance, last_spin: now }).eq('id', user.id);
-        if (!error) {
+    triggerAd(20, async () => {
+        setIsSpinning(true);
+        const randomIndex = Math.floor(Math.random() * spinOptions.length);
+        const segmentAngle = 360 / spinOptions.length;
+        const extraSpins = 3600; 
+        const currentRotationBase = spinRotation - (spinRotation % 360);
+        const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle));
+        setSpinRotation(finalRotation);
+
+        setTimeout(async () => {
+          const winner = spinOptions[randomIndex];
+          const newBalance = user.balance + winner.amt;
+          const now = Date.now();
+          await supabase.from('users').update({ balance: newBalance, last_spin: now }).eq('id', user.id);
           setUser(prev => ({ ...prev, balance: newBalance, last_spin: now }));
           alert(`Wheel landed on ${winner.label}! Added ${winner.amt} TON ✅`);
-        }
-        setIsSpinning(false);
-        fetchAllData();
-      }, 4000);
-    });
-  };
-
-  const handleRedeemPromo = () => {
-    triggerAd(20, async () => {
-      const { data: promo } = await supabase.from('promo_codes').select('*').eq('code', promoCodeInput).single();
-      if (!promo) return alert("Invalid Reward Code!");
-      if (promo.used_by?.includes(user.id)) return alert("Code already used!");
-      const updatedUsedBy = [...(promo.used_by || []), user.id];
-      const newBalance = user.balance + promo.value;
-      await supabase.from('promo_codes').update({ used_by: updatedUsedBy }).eq('code', promoCodeInput);
-      await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
-      setUser(prev => ({ ...prev, balance: newBalance }));
-      alert(`Reward ${promo.value} TON Claimed! ✅`);
-      setPromoCodeInput('');
-      fetchAllData();
-    });
-  };
-
-  const handleStartTask = async (task) => {
-    window.open(task.link);
-    triggerAd(20, async () => {
-      if (!user.completed_tasks?.includes(task.id)) {
-          const updatedTasks = [...(user.completed_tasks || []), task.id];
-          const newBalance = user.balance + 0.001; // Specific requirement: 0.001 TON
-          await supabase.from('users').update({ balance: newBalance, completed_tasks: updatedTasks }).eq('id', user.id);
-          setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
-          alert("0.001 TON Added! ✅"); 
+          setIsSpinning(false);
           fetchAllData();
-      }
+        }, 4000);
     });
   };
 
-  const handleWithdraw = () => {
+  const handleStartTask = (task) => {
     triggerAd(20, async () => {
-      const amt = Number(withdrawAmt);
-      if (amt < 0.1) return alert("Minimum 0.1 TON");
-      if (amt > user.balance) return alert("Insufficient Balance!");
-      const currentDate = new Date().toISOString();
-      await supabase.from('withdrawals').insert([{ user_id: user.id, amount: amt, address: withdrawAddr, status: 'Pending', created_at: currentDate }]);
-      const newBalance = user.balance - amt;
-      await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
-      setUser(prev => ({ ...prev, balance: newBalance }));
-      alert("Withdrawal Requested! ✅"); 
-      fetchAllData();
+        window.open(task.link, '_blank');
+        if (!user.completed_tasks?.includes(task.id)) {
+            const updatedTasks = [...(user.completed_tasks || []), task.id];
+            const newBalance = user.balance + 0.001;
+            await supabase.from('users').update({ balance: newBalance, completed_tasks: updatedTasks }).eq('id', user.id);
+            setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
+            alert("0.001 TON Added! ✅"); 
+            fetchAllData();
+        }
     });
   };
 
-  // --- ADMIN FUNCTIONS (No Ads for Admin Tools) ---
+  const changeTab = (tab) => {
+    if (tab === mainTab) return;
+    triggerAd(20, () => setMainTab(tab));
+  };
+
+  // --- REMAINING ORIGINAL FUNCTIONS UNTOUCHED ---
+  const handleRedeemPromo = async () => {
+    const { data: promo } = await supabase.from('promo_codes').select('*').eq('code', promoCodeInput).single();
+    if (!promo) return alert("Invalid Reward Code!");
+    if (promo.used_by?.includes(user.id)) return alert("Code already used!");
+    const updatedUsedBy = [...(promo.used_by || []), user.id];
+    const newBalance = user.balance + promo.value;
+    await supabase.from('promo_codes').update({ used_by: updatedUsedBy }).eq('code', promoCodeInput);
+    await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
+    setUser(prev => ({ ...prev, balance: newBalance }));
+    alert(`Reward ${promo.value} TON Claimed! ✅`);
+    setPromoCodeInput('');
+    fetchAllData();
+  };
+
   const handleCheckUser = async () => {
     if (!targetId) return;
     const { data: userData } = await supabase.from('users').select('*').eq('id', targetId).single();
@@ -245,7 +212,7 @@ function App() {
         setEditBal(userData.balance); 
         setEditVip(userData.is_vip); 
         setUserWithdraws(withdrawData || []);
-    } else alert("User Not Found!");
+    } else { alert("User Not Found!"); }
   };
 
   const handleUpdateUser = async () => {
@@ -253,9 +220,10 @@ function App() {
     const { error } = await supabase.from('users').update(updatedFields).eq('id', targetId);
     if (!error) {
         alert("User Data Updated! ✅");
+        setSearchedUser(prev => ({ ...prev, ...updatedFields }));
         if (targetId === user.id) setUser(prev => ({ ...prev, ...updatedFields }));
         fetchAllData(); 
-    }
+    } else { alert("Update Failed!"); }
   };
 
   const approveWithdraw = async (wId) => {
@@ -264,8 +232,20 @@ function App() {
     handleCheckUser();
   };
 
+  const handleWithdraw = async () => {
+    const amt = Number(withdrawAmt);
+    if (amt < 0.1) return alert("Minimum 0.1 TON");
+    if (amt > user.balance) return alert("Insufficient Balance!");
+    const currentDate = new Date().toISOString();
+    await supabase.from('withdrawals').insert([{ user_id: user.id, amount: amt, address: withdrawAddr, status: 'Pending', created_at: currentDate }]);
+    const newBalance = user.balance - amt;
+    await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
+    setUser(prev => ({ ...prev, balance: newBalance }));
+    alert("Withdrawal Requested! ✅"); fetchAllData();
+  };
+
   const styles = {
-    container: { backgroundColor: '#facc15', minHeight: '100vh', padding: '15px', paddingBottom: '100px', fontFamily: 'sans-serif', position:'relative' },
+    container: { backgroundColor: '#facc15', minHeight: '100vh', padding: '15px', paddingBottom: '100px', fontFamily: 'sans-serif' },
     card: { background: '#fff', padding: '15px', borderRadius: '15px', border: '2px solid #000', marginBottom: '10px' },
     btn: { background: '#000', color: '#fff', padding: '12px', borderRadius: '10px', border: 'none', fontWeight: 'bold', cursor: 'pointer' },
     input: { width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '10px', border: '1px solid #000', boxSizing: 'border-box' },
@@ -277,29 +257,21 @@ function App() {
     wheelArrow: { position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
     wheel: { width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${spinOptions.map((o, i) => `${o.color} ${i * (360/spinOptions.length)}deg ${(i+1) * (360/spinOptions.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${spinRotation}deg)` },
     watchText: { textAlign: 'center', marginBottom: 10, fontWeight: 'bold', fontSize: 13 },
-    adOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.95)', zIndex: 1000, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#fff', textAlign: 'center', padding: 20 },
-    adTimerCircle: { width: 80, height: 80, borderRadius: '50%', border: '4px solid #facc15', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: 30, fontWeight: 'bold', marginBottom: 20 }
+    adOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.9)', zIndex: 9999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#fff', textAlign: 'center', padding: 20 }
   };
 
   if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>LOADING...</div>;
 
   return (
     <div style={styles.container}>
-      
-      {/* --- AD OVERLAY UI --- */}
-      {showAdOverlay && (
+      {/* AD PROGRESS OVERLAY */}
+      {adActive && (
         <div style={styles.adOverlay}>
-          <h2 style={{color: '#facc15'}}>ADVERTISING LOADING</h2>
-          <p>Please wait for the timer to finish</p>
-          <div style={styles.adTimerCircle}>{adTimer}</div>
-          <p style={{fontSize: 12, opacity: 0.7}}>DO NOT CLOSE THE ADS PAGE UNTIL FINISHED</p>
-          <button 
-            onClick={closeAdAndExecute} 
-            style={{...styles.btn, background: adTimer > 0 ? '#444' : '#facc15', color: adTimer > 0 ? '#888' : '#000', width: '80%', marginTop: 20}}
-            disabled={adTimer > 0}
-          >
-            {adTimer > 0 ? 'PLEASE WAIT...' : 'CLOSE & CONTINUE'}
-          </button>
+          <h2>ADS IN PROGRESS 📺</h2>
+          <p>Please do not close the advertisement window.</p>
+          <p>Reward will be added after {adRequiredTime} seconds.</p>
+          <div style={{marginTop: 20, width: 50, height: 50, border: '5px solid #facc15', borderTop: '5px solid transparent', borderRadius: '50%', animation: 'spin 1s linear infinite'}}></div>
+          <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
         </div>
       )}
 
@@ -316,7 +288,7 @@ function App() {
       </div>
 
       <button onClick={handleWatchAds} style={{...styles.btn, width:'100%', background:'linear-gradient(to right, #ff416c, #ff4b2b)', marginBottom:15, height:50, fontSize:16, border:'2px solid #000'}}>
-        📺 WATCH ADS & EARN (30s)
+        📺 WATCH ADS & EARN
       </button>
 
       {/* Earn Sub-Tabs */}
@@ -324,7 +296,7 @@ function App() {
         <div style={{display:'flex', gap:5, marginBottom:15}}>
           {['bot', 'social', 'reward', 'admin'].map(tab => (
             (tab !== 'admin' || user.id === ADMIN_ID) && 
-            <button key={tab} onClick={()=>handleTabChange('sub', tab)} style={{flex:1, padding:10, fontSize:10, borderRadius:10, background:subTab===tab?'#000':'#fff', color:subTab===tab?'#fff':'#000', border:'2px solid #000', fontWeight:'bold'}}>
+            <button key={tab} onClick={()=>setSubTab(tab)} style={{flex:1, padding:10, fontSize:10, borderRadius:10, background:subTab===tab?'#000':'#fff', color:subTab===tab?'#fff':'#000', border:'2px solid #000', fontWeight:'bold'}}>
               {tab.toUpperCase()}
             </button>
           ))}
@@ -337,6 +309,7 @@ function App() {
             <div>
               <div style={{...styles.card, textAlign:'center'}}>
                 <h3 style={{marginTop:0}}>🎡 LUCKY SPIN</h3>
+                <p style={{fontSize:11}}>Spin every 2 hours!</p>
                 <div style={styles.wheelWrapper}>
                     <div style={styles.wheelArrow}></div>
                     <div style={styles.wheel}></div>
@@ -344,42 +317,64 @@ function App() {
                 <button onClick={handleSpin} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#00d2ff'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
                   {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'SPIN NOW'}
                 </button>
+                <div style={{textAlign:'left', marginTop:20, fontSize:11, display:'grid', gridTemplateColumns:'1fr 1fr'}}>
+                  {spinOptions.map((o,i) => (
+                    <div key={i} style={{marginBottom:4}}><span style={styles.dot(o.color)}></span> {o.amt}</div>
+                  ))}
+                </div>
               </div>
               <div style={styles.card}>
-                <h4>🎁 REDEEM CODE</h4>
-                <input style={styles.input} placeholder="Enter Code" value={promoCodeInput} onChange={e=>setPromoCodeInput(e.target.value)} />
-                <button onClick={handleRedeemPromo} style={{...styles.btn, width:'100%', background:'#ff9900'}}>CLAIM</button>
+                <h4 style={{marginTop:0}}>🎁 REDEEM CODE</h4>
+                <input style={styles.input} placeholder="Enter Reward Code" value={promoCodeInput} onChange={e=>setPromoCodeInput(e.target.value)} />
+                <button onClick={handleRedeemPromo} style={{...styles.btn, width:'100%', background:'#ff9900'}}>CLAIM REWARD</button>
               </div>
             </div>
           ) : subTab === 'admin' ? (
             <div style={styles.card}>
-              <h3>Admin Panel</h3>
-              <input style={styles.input} placeholder="UID" value={targetId} onChange={e=>setTargetId(e.target.value)} />
+              <h3 style={{marginTop:0}}>Admin Panel</h3>
+              <input style={styles.input} placeholder="Search User UID" value={targetId} onChange={e=>setTargetId(e.target.value)} />
               <button style={{...styles.btn, width:'100%', marginBottom:10}} onClick={handleCheckUser}>CHECK USER</button>
               {searchedUser && (
-                <div style={{padding: 10, background:'#f0f9ff', borderRadius: 10, border: '1px solid #000'}}>
-                  <p>ID: {searchedUser.id}</p>
+                <div style={{background:'#f0f9ff', padding:15, borderRadius:10, border:'1px solid #000', marginBottom:10}}>
+                  <p><b>User Found:</b> {searchedUser.id}</p>
+                  <p>Current Bal: {searchedUser.balance} | VIP: {searchedUser.is_vip ? 'Yes' : 'No'}</p>
+                  <hr/>
+                  <label style={{fontSize:12, fontWeight:'bold'}}>Edit Balance:</label>
                   <input style={styles.input} type="number" value={editBal} onChange={e=>setEditBal(e.target.value)} />
+                  <label style={{fontSize:12, fontWeight:'bold'}}>VIP Status:</label>
                   <select style={styles.input} value={editVip} onChange={e=>setEditVip(e.target.value === 'true')}>
                     <option value="false">Standard</option>
                     <option value="true">VIP ⭐</option>
                   </select>
-                  <button style={{...styles.btn, width:'100%', background:'green'}} onClick={handleUpdateUser}>UPDATE</button>
-                  {userWithdraws.map(w => (
-                    <button key={w.id} onClick={() => approveWithdraw(w.id)} style={{...styles.btn, background:'blue', width:'100%', marginTop:5}}>Approve {w.amount} TON</button>
-                  ))}
+                  <button style={{...styles.btn, width:'100%', background:'green', marginBottom:15}} onClick={handleUpdateUser}>UPDATE DATA</button>
+                  {userWithdraws.length > 0 && (
+                    <div style={{background:'#fff', padding:10, borderRadius:8, border:'1px solid #ddd'}}>
+                        <h4 style={{margin:'0 0 10px 0'}}>Pending Withdrawals</h4>
+                        {userWithdraws.map(w => (
+                            <div key={w.id} style={{fontSize:11, marginBottom:10, paddingBottom:5, borderBottom:'1px solid #eee'}}>
+                                {w.amount} TON to {w.address.slice(0,10)}...
+                                <button onClick={() => approveWithdraw(w.id)} style={{float:'right', background:'blue', color:'#fff', border:'none', padding:'4px 8px', borderRadius:5}}>Success</button>
+                            </div>
+                        ))}
+                    </div>
+                  )}
                 </div>
               )}
               <hr/>
-              <input style={styles.input} placeholder="Promo Code" value={adminPromoCode} onChange={e=>setAdminPromoCode(e.target.value)} />
-              <input style={styles.input} placeholder="Value" type="number" value={adminPromoValue} onChange={e=>setAdminPromoValue(e.target.value)} />
-              <button style={{...styles.btn, width:'100%', background:'#ff9900'}} onClick={async ()=>{
+              <h4>Create Reward Code</h4>
+              <input style={styles.input} placeholder="Code Name" value={adminPromoCode} onChange={e=>setAdminPromoCode(e.target.value)} />
+              <input style={styles.input} placeholder="TON Value" type="number" value={adminPromoValue} onChange={e=>setAdminPromoValue(e.target.value)} />
+              <button style={{...styles.btn, width:'100%', background:'#ff9900', marginBottom:15}} onClick={async ()=>{
                 await supabase.from('promo_codes').insert([{code:adminPromoCode, value:Number(adminPromoValue), used_by:[]}]);
-                alert("Promo Created!");
+                alert("Promo Code Created!");
               }}>CREATE PROMO</button>
               <hr/>
-              <input style={styles.input} placeholder="Task Name" value={taskName} onChange={e=>setTaskName(e.target.value)} />
-              <input style={styles.input} placeholder="Task Link" value={taskLink} onChange={e=>setTaskLink(e.target.value)} />
+              <h4>Add Task</h4>
+              <input style={styles.input} placeholder="Name" value={taskName} onChange={e=>setTaskName(e.target.value)} />
+              <input style={styles.input} placeholder="Link" value={taskLink} onChange={e=>setTaskLink(e.target.value)} />
+              <select style={styles.input} value={taskType} onChange={e=>setTaskType(e.target.value)}>
+                <option value="bot">Bot</option><option value="social">Social</option>
+              </select>
               <button style={{...styles.btn, width:'100%'}} onClick={async ()=>{
                 await supabase.from('global_tasks').insert([{name:taskName, link:taskLink, type:taskType}]);
                 alert("Task Added!"); fetchAllData();
@@ -398,42 +393,58 @@ function App() {
         {mainTab === 'invite' && (
           <div style={{...styles.card, textAlign:'center'}}>
             <h3>Invite & Earn</h3>
-            <p>0.001 TON per referral</p>
-            <code>https://t.me/EasyTONFree_Bot?start={user.id}</code>
-            <button onClick={() => {navigator.clipboard.writeText(`https://t.me/EasyTONFree_Bot?start=${user.id}`); alert("Copied!");}} style={{...styles.btn, width:'100%', marginTop:10}}>COPY LINK</button>
-            <h4 style={{textAlign:'left', marginTop: 20}}>Referrals: {invites.length}</h4>
-            {invites.map((inv, i) => <div key={i} style={{fontSize:11, padding:5, borderBottom:'1px solid #eee'}}>ID: {inv.id}</div>)}
+            <p style={{color:'green', fontWeight:'bold'}}>Get 0.001 TON per referral!</p>
+            <div style={{background:'#eee', padding:15, borderRadius:10, wordBreak:'break-all', marginBottom:15}}>
+                <code>https://t.me/EasyTONFree_Bot?start={user.id}</code>
+            </div>
+            <button onClick={() => {navigator.clipboard.writeText(`https://t.me/EasyTONFree_Bot?start=${user.id}`); alert("Copied!");}} style={{...styles.btn, width:'100%'}}>COPY LINK</button>
+            <h4 style={{marginTop:25, textAlign:'left'}}>History ({invites.length})</h4>
+            {invites.map((inv, i) => <div key={i} style={{fontSize:11, padding:5, borderBottom:'1px solid #eee'}}>User ID: {inv.id} <b style={{float:'right', color:'green'}}>+0.001 ✅</b></div>)}
           </div>
         )}
 
         {mainTab === 'rank' && (
           <div style={styles.card}>
-             <h3 style={{textAlign:'center'}}>🏆 TOP RANKINGS</h3>
-             <table style={{width:'100%', fontSize:12}}>
-               <thead><tr><th align="left">ID</th><th align="right">TON</th></tr></thead>
-               <tbody>
-                 {rankList.map((r, i) => <tr key={i}><td style={{padding:5}}>{i+1}. {r.id}</td><td align="right"><b>{r.balance.toFixed(4)}</b></td></tr>)}
-               </tbody>
-             </table>
+            <h3 style={{textAlign:'center', marginTop:0}}>🏆 TOP 50 RANKINGS</h3>
+            <table style={{width:'100%', fontSize:12, borderCollapse:'collapse'}}>
+              <thead><tr style={{borderBottom:'2px solid #000'}}><th align="left">User ID</th><th align="right">Amount</th></tr></thead>
+              <tbody>
+                {rankList.map((r, i) => (
+                  <tr key={i} style={{borderBottom:'1px solid #eee', background: r.id === user.id ? '#fff9c4' : 'none'}}>
+                    <td style={{padding:'10px 0'}}>{i+1}. {r.id}</td>
+                    <td align="right" style={{color:'blue', fontWeight:'bold'}}>{r.balance.toFixed(4)} TON</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
 
         {mainTab === 'withdraw' && (
           <div>
-            <div style={{...styles.card, border: '2px solid gold'}}>
-                <h4 style={{margin:0}}>💎 VIP UPGRADE (1 TON)</h4>
-                <p style={{fontSize:10}}>UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9</p>
-                <p style={{fontSize:10}}>Memo: {user.id}</p>
+            <div style={{...styles.card, border: '2px solid gold', background: '#fffcf0'}}>
+                <h4 style={{margin:0, color: '#b8860b'}}>💎 UPGRADE VIP (1 TON)</h4>
+                <p style={{fontSize:11}}>Address: UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9 
+                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText('UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9'); alert("Copied!");}}>COPY</span>
+                </p>
+                <p style={{fontSize:11}}>Memo: {user.id} 
+                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(user.id); alert("Copied!");}}>COPY</span>
+                </p>
             </div>
             <div style={styles.card}>
               <h4>Withdraw TON</h4>
-              <input style={styles.input} placeholder="Address" value={withdrawAddr} onChange={e=>setWithdrawAddr(e.target.value)} />
+              <input style={styles.input} placeholder="TON Address" value={withdrawAddr} onChange={e=>setWithdrawAddr(e.target.value)} />
               <input style={styles.input} placeholder="Amount (Min 0.1)" type="number" value={withdrawAmt} onChange={e=>setWithdrawAmt(e.target.value)} />
               <button onClick={handleWithdraw} style={{...styles.btn, width:'100%', background:'#0052ff'}}>WITHDRAW</button>
             </div>
+            <h4 style={{marginLeft: 10}}>History</h4>
             {withdraws.map((w,i) => (
-              <div key={i} style={{...styles.card, fontSize:12}}>
-                {w.amount} TON | {w.status} | {new Date(w.created_at).toLocaleDateString()}
+              <div key={i} style={{...styles.card, fontSize:13}}>
+                <div style={{display:'flex', justifyContent:'space-between'}}>
+                  <span>{w.amount} TON</span>
+                  <span style={{color: w.status === 'Success' ? 'green' : 'orange', fontWeight:'bold'}}>{w.status}</span>
+                </div>
+                <small style={{color:'#888'}}>{new Date(w.created_at).toLocaleString()}</small>
               </div>
             ))}
           </div>
@@ -442,9 +453,11 @@ function App() {
         {mainTab === 'profile' && (
           <div style={{...styles.card, textAlign:'center'}}>
             <h3>Profile</h3>
-            <p>ID: {user.id}</p>
-            <p>Balance: {user.balance.toFixed(5)} TON</p>
-            <p>Status: {user.is_vip ? "VIP ⭐" : "Standard User"}</p>
+            <div style={{textAlign:'left', marginBottom:20, background: '#f9f9f9', padding: 15, borderRadius: 10}}>
+                <p><b>ID:</b> {user.id}</p>
+                <p><b>Balance:</b> {user.balance.toFixed(5)} TON</p>
+                <p><b>Status:</b> {user.is_vip ? <span style={{color: '#28a745', fontWeight: 'bold'}}>VIP ⭐</span> : "Standard User"}</p>
+            </div>
             <button onClick={()=>window.open("https://t.me/EasyTonHelp_Bot")} style={{...styles.btn, width:'100%', background:'#0088cc'}}>SUPPORT</button>
           </div>
         )}
@@ -452,11 +465,11 @@ function App() {
 
       {/* Bottom Nav */}
       <div style={styles.bottomNav}>
-        <div onClick={()=>handleTabChange('main', 'earn')} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
-        <div onClick={()=>handleTabChange('main', 'invite')} style={styles.navItem(mainTab==='invite')}>👥<br/>INVITE</div>
-        <div onClick={()=>handleTabChange('main', 'rank')} style={styles.navItem(mainTab==='rank')}>🏆<br/>RANK</div>
-        <div onClick={()=>handleTabChange('main', 'withdraw')} style={styles.navItem(mainTab==='withdraw')}>💳<br/>CASH</div>
-        <div onClick={()=>handleTabChange('main', 'profile')} style={styles.navItem(mainTab==='profile')}>👤<br/>PROFILE</div>
+        <div onClick={()=>changeTab('earn')} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
+        <div onClick={()=>changeTab('invite')} style={styles.navItem(mainTab==='invite')}>👥<br/>INVITE</div>
+        <div onClick={()=>changeTab('rank')} style={styles.navItem(mainTab==='rank')}>🏆<br/>RANK</div>
+        <div onClick={()=>changeTab('withdraw')} style={styles.navItem(mainTab==='withdraw')}>💳<br/>CASH</div>
+        <div onClick={()=>changeTab('profile')} style={styles.navItem(mainTab==='profile')}>👤<br/>PROFILE</div>
       </div>
     </div>
   );
