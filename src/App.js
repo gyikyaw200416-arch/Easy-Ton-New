@@ -75,9 +75,20 @@ function App() {
 
   const fetchAllData = useCallback(async () => {
     let { data: uData } = await supabase.from('users').select('*').eq('id', user.id).single();
+    
     if (!uData) {
         const startParam = tg?.initDataUnsafe?.start_param;
-        const { data: newUser } = await supabase.from('users').insert([{ id: user.id, balance: 0, invited_by: startParam, completed_tasks: [], last_spin: 0 }]).select().single();
+        // Referral Logic: Add 0.005 TON to Inviter
+        if (startParam && startParam !== user.id) {
+            const { data: inviter } = await supabase.from('users').select('balance').eq('id', startParam).single();
+            if (inviter) {
+                await supabase.from('users').update({ balance: inviter.balance + 0.005 }).eq('id', startParam);
+            }
+        }
+
+        const { data: newUser } = await supabase.from('users').insert([{ 
+            id: user.id, balance: 0, invited_by: startParam, completed_tasks: [], last_spin: 0 
+        }]).select().single();
         uData = newUser;
     }
     setUser(uData);
@@ -95,7 +106,7 @@ function App() {
     const { data: wData } = await supabase.from('withdrawals').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
     if (wData) setWithdraws(wData);
 
-    const { data: iData } = await supabase.from('users').select('id').eq('invited_by', user.id);
+    const { data: iData } = await supabase.from('users').select('id, balance').eq('invited_by', user.id);
     if (iData) setInvites(iData);
 
     setLoading(false);
@@ -140,13 +151,11 @@ function App() {
 
   const handleWatchAds = () => {
     triggerAd(30, async () => {
-      const reward = user.is_vip ? 0.0008 : 0.0003;
+      const reward = 0.001; // Auto Reward 0.001 TON
       const newBalance = user.balance + reward;
-      const { error } = await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
-      if(!error) {
-          setUser(prev => ({ ...prev, balance: newBalance }));
-          alert(`Success! Earned ${reward} TON ✅`);
-      }
+      await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
+      setUser(prev => ({ ...prev, balance: newBalance }));
+      alert(`Success! Earned ${reward} TON ✅`);
       fetchAllData();
     });
   };
@@ -197,16 +206,15 @@ function App() {
   };
 
   const handleStartTask = async (task) => {
+    if (user.completed_tasks?.includes(task.id)) return alert("Task already completed!");
     window.open(task.link, '_blank');
     triggerAd(20, async () => {
-        if (!user.completed_tasks?.includes(task.id)) {
-            const updatedTasks = [...(user.completed_tasks || []), task.id];
-            const newBalance = user.balance + 0.001;
-            await supabase.from('users').update({ balance: newBalance, completed_tasks: updatedTasks }).eq('id', user.id);
-            setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
-            alert("Task Completed! ✅"); 
-            fetchAllData();
-        }
+        const updatedTasks = [...(user.completed_tasks || []), task.id];
+        const newBalance = user.balance + 0.001;
+        await supabase.from('users').update({ balance: newBalance, completed_tasks: updatedTasks }).eq('id', user.id);
+        setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
+        alert("Task Completed! +0.001 TON Added ✅"); 
+        fetchAllData();
     });
   };
 
@@ -299,8 +307,7 @@ function App() {
       </div>
 
       <div style={styles.watchText}>
-        <span style={{ color: !user.is_vip ? '#28a745' : '#888' }}>Standard: 0.0003</span> | 
-        <span style={{ color: user.is_vip ? '#28a745' : '#888' }}> VIP: 0.0008</span>
+        Reward per Ad: <span style={{ color: '#28a745' }}>0.001 TON</span>
       </div>
 
       <button onClick={handleWatchAds} style={{...styles.btn, width:'100%', background:'linear-gradient(to right, #ff416c, #ff4b2b)', marginBottom:15, height:50, fontSize:16, border:'2px solid #000'}}>
@@ -364,6 +371,14 @@ function App() {
                 </div>
               )}
               <hr/>
+              <h4>Manage Tasks (Delete)</h4>
+              {tasks.map(t => (
+                <div key={t.id} style={{display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #eee'}}>
+                   <span style={{fontSize:12}}>{t.name} ({t.type})</span>
+                   <button onClick={async () => { if(window.confirm("Delete?")){ await supabase.from('global_tasks').delete().eq('id', t.id); fetchAllData(); } }} style={{background:'red', color:'#fff', border:'none', borderRadius:5, fontSize:10, padding:'2px 8px'}}>DELETE</button>
+                </div>
+              ))}
+              <hr/>
               <h4>Create Reward Code</h4>
               <input style={styles.input} placeholder="Code Name" value={adminPromoCode} onChange={e=>setAdminPromoCode(e.target.value)} />
               <input style={styles.input} placeholder="TON Value" type="number" value={adminPromoValue} onChange={e=>setAdminPromoValue(e.target.value)} />
@@ -396,12 +411,15 @@ function App() {
         {mainTab === 'invite' && (
           <div style={{...styles.card, textAlign:'center'}}>
             <h3>Invite & Earn</h3>
-            <p style={{color:'green', fontWeight:'bold'}}>Refer friends to earn rewards!</p>
+            <p style={{color:'green', fontWeight:'bold'}}>Invite Friend: +0.005 TON Reward!</p>
             <div style={{background:'#eee', padding:15, borderRadius:10, wordBreak:'break-all', marginBottom:15}}>
                 <code>https://t.me/EasyTONFree_Bot?start={user.id}</code>
             </div>
             <button onClick={() => {navigator.clipboard.writeText(`https://t.me/EasyTONFree_Bot?start=${user.id}`); alert("Copied!");}} style={{...styles.btn, width:'100%'}}>COPY LINK</button>
-            {invites.map((inv, i) => <div key={i} style={{fontSize:11, padding:5, borderBottom:'1px solid #eee'}}>User ID: {inv.id} <b style={{float:'right', color:'green'}}>Completed ✅</b></div>)}
+            <div style={{marginTop:20, textAlign:'left'}}>
+               <h4>Invite History</h4>
+               {invites.map((inv, i) => <div key={i} style={{fontSize:11, padding:5, borderBottom:'1px solid #eee'}}>User ID: {inv.id} <b style={{float:'right', color:'green'}}>+0.005 TON ✅</b></div>)}
+            </div>
           </div>
         )}
 
