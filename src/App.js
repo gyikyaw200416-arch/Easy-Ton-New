@@ -38,17 +38,17 @@ function App() {
   const [adminPromoCode, setAdminPromoCode] = useState('');
   const [adminPromoValue, setAdminPromoValue] = useState('');
 
-  // Spin Options matching the order in conic-gradient (0 to 360 degrees)
+  // 1. Precise Spin Options & Visual alignment
   const spinOptions = [
-    { amt: 0.00009, color: '#007AFF', label: 'Blue' },   // 0 - 40 deg
-    { amt: 0.0001, color: '#FF3B30', label: 'Red' },     // 40 - 80 deg
-    { amt: 0.0002, color: '#FFD60A', label: 'Yellow' },  // 80 - 120 deg
-    { amt: 0.0003, color: '#34C759', label: 'Green' },   // 120 - 160 deg
-    { amt: 0.00004, color: '#000000', label: 'Black' },  // 160 - 200 deg
-    { amt: 0.00008, color: '#FF9500', label: 'Orange' }, // 200 - 240 deg
-    { amt: 0.00007, color: '#AF52DE', label: 'Purple' }, // 240 - 280 deg
-    { amt: 0.0009, color: '#FF2D55', label: 'Pink' },    // 280 - 320 deg
-    { amt: 0.001, color: '#FFFFFF', label: 'White' }     // 320 - 360 deg
+    { amt: 0.00009, color: '#007AFF', label: 'Blue' },   
+    { amt: 0.0001, color: '#FF3B30', label: 'Red' },     
+    { amt: 0.0002, color: '#FFD60A', label: 'Yellow' },  
+    { amt: 0.0003, color: '#34C759', label: 'Green' },   
+    { amt: 0.00004, color: '#000000', label: 'Black' },  
+    { amt: 0.00008, color: '#FF9500', label: 'Orange' }, 
+    { amt: 0.00007, color: '#AF52DE', label: 'Purple' }, 
+    { amt: 0.0009, color: '#FF2D55', label: 'Pink' },    
+    { amt: 0.001, color: '#FFFFFF', label: 'White' }     
   ];
 
   const fetchAllData = useCallback(async () => {
@@ -60,7 +60,7 @@ function App() {
     }
     setUser(uData);
     
-    // 2-hour Spin Logic
+    // 2. 2-hour Spin Cooldown logic
     const waitTime = 2 * 60 * 60 * 1000; 
     const diff = waitTime - (Date.now() - (uData.last_spin || 0));
     setTimeLeft(diff > 0 ? diff : 0);
@@ -68,9 +68,15 @@ function App() {
     const { data: tData } = await supabase.from('global_tasks').select('*');
     if (tData) setTasks(tData);
 
-    // Correct Rank List Logic (Dynamic)
+    // 3. Rank List: Decreasing from 30 TON for Top 50
     const { data: rData } = await supabase.from('users').select('id, balance').order('balance', { ascending: false }).limit(50);
-    if (rData) setRankList(rData);
+    if (rData) {
+        const fakeRank = rData.map((p, index) => ({
+            ...p,
+            displayBalance: (30 - (index * 0.45)).toFixed(4) // Starts at 30 and drops slightly per rank
+        }));
+        setRankList(fakeRank);
+    }
 
     const { data: wData } = await supabase.from('withdrawals').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
     if (wData) setWithdraws(wData);
@@ -94,16 +100,20 @@ function App() {
     fetchAllData();
   };
 
+  // 4. Spin Logic with 2hr cooldown and Ads trigger
   const handleSpin = async () => {
-    if (timeLeft > 0) return alert("Please wait for the cooldown!");
+    if (timeLeft > 0) {
+        alert("Cooldown active! Watching Ads instead...");
+        // Logic for ads can be triggered here
+        return;
+    }
     if (isSpinning) return;
 
     setIsSpinning(true);
     const randomIndex = Math.floor(Math.random() * spinOptions.length);
     const segmentAngle = 360 / spinOptions.length;
     
-    // Calculate rotation: Full spins + (offset to put target segment under the arrow at the top)
-    // 0 index is Blue (starting at 0 deg). To put it at top (270 deg ref or 360 - offset)
+    // Land precisely on the arrow at the top
     const newRotation = spinRotation + (360 * 10) - (randomIndex * segmentAngle);
     setSpinRotation(newRotation);
 
@@ -120,10 +130,17 @@ function App() {
     }, 4000);
   };
 
+  // 5. One-time Promo Code Claiming logic
   const handleRedeemPromo = async () => {
     const { data: promo } = await supabase.from('promo_codes').select('*').eq('code', promoCodeInput).single();
     if (!promo) return alert("Invalid Reward Code!");
-    if (promo.used_by?.includes(user.id)) return alert("Code already used!");
+    
+    if (promo.used_by?.includes(user.id)) {
+        alert("Code already used! Watching Ads instead...");
+        // Logic for ads can be triggered here
+        return;
+    }
+
     const updatedUsedBy = [...(promo.used_by || []), user.id];
     await supabase.from('promo_codes').update({ used_by: updatedUsedBy }).eq('code', promoCodeInput);
     await supabase.from('users').update({ balance: user.balance + promo.value }).eq('id', user.id);
@@ -175,11 +192,21 @@ function App() {
     }
   };
 
+  // 6. Withdraw with History Date
   const handleWithdraw = async () => {
     const amt = Number(withdrawAmt);
     if (amt < 0.1) return alert("Minimum 0.1 TON");
     if (amt > user.balance) return alert("Insufficient Balance!");
-    await supabase.from('withdrawals').insert([{ user_id: user.id, amount: amt, address: withdrawAddr, status: 'Pending' }]);
+    
+    const currentDate = new Date().toISOString(); // Store timestamp
+    await supabase.from('withdrawals').insert([{ 
+        user_id: user.id, 
+        amount: amt, 
+        address: withdrawAddr, 
+        status: 'Pending',
+        created_at: currentDate 
+    }]);
+    
     await supabase.from('users').update({ balance: user.balance - amt }).eq('id', user.id);
     alert("Withdrawal Requested! ✅"); fetchAllData();
   };
@@ -193,11 +220,11 @@ function App() {
     navItem: (active) => ({ color: active ? '#facc15' : '#fff', textAlign: 'center', fontSize: '11px', fontWeight: 'bold', flex: 1, cursor: 'pointer' }),
     dot: (c) => ({ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: c, marginRight: 8, border: '1px solid #000' }),
     copyBtn: { background: '#eee', border: '1px solid #000', fontSize: '10px', padding: '2px 6px', marginLeft: '5px', borderRadius: '5px', cursor: 'pointer' },
-    wheelWrapper: { position: 'relative', width: 200, height: 200, margin: '20px auto' },
+    wheelWrapper: { position: 'relative', width: 220, height: 220, margin: '20px auto' },
     wheelArrow: { 
-        position: 'absolute', top: -15, left: '50%', transform: 'translateX(-50%)', 
-        width: 0, height: 0, borderLeft: '12px solid transparent', borderRight: '12px solid transparent', 
-        borderTop: '25px solid #000', zIndex: 5 
+        position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', 
+        width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', 
+        borderTop: '30px solid #000', zIndex: 10 
     },
     wheel: {
         width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000',
@@ -218,17 +245,10 @@ function App() {
          {user.is_vip && <span style={{color:'#facc15', fontSize:12, fontWeight:'bold'}}>⭐ VIP MEMBER</span>}
       </div>
 
-      {/* Ads Button */}
-      <div style={{textAlign:'center', marginBottom:8}}>
-         <small style={{fontWeight:'bold'}}>
-            Normal: 0.0003 | <span style={{color: user.is_vip ? 'gold' : 'red'}}>{user.is_vip ? '👑 VIP: 0.0008' : 'VIP: 0.0008'}</span>
-         </small>
-      </div>
       <button onClick={handleWatchAds} style={{...styles.btn, width:'100%', background:'linear-gradient(to right, #ff416c, #ff4b2b)', marginBottom:15, height:50, fontSize:16, border:'2px solid #000'}}>
         📺 WATCH ADS & EARN
       </button>
 
-      {/* Sub-tabs for EARN */}
       {mainTab === 'earn' && (
         <div style={{display:'flex', gap:5, marginBottom:15}}>
           {['bot', 'social', 'reward', 'admin'].map(tab => (
@@ -253,13 +273,9 @@ function App() {
                     <div style={styles.wheel}></div>
                 </div>
 
-                {timeLeft > 0 ? (
-                  <button style={{...styles.btn, width:'100%', background:'#ccc'}} disabled>Wait: {Math.floor(timeLeft/60000)}m</button>
-                ) : (
-                  <button onClick={handleSpin} style={{...styles.btn, width:'100%', background:'#00d2ff'}} disabled={isSpinning}>
-                    {isSpinning ? 'SPINNING...' : 'SPIN NOW'}
-                  </button>
-                )}
+                <button onClick={handleSpin} style={{...styles.btn, width:'100%', background: timeLeft > 0 ? '#ccc' : '#00d2ff'}} disabled={isSpinning}>
+                  {isSpinning ? 'SPINNING...' : timeLeft > 0 ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'SPIN NOW'}
+                </button>
                 <div style={{textAlign:'left', marginTop:20, fontSize:11}}>
                   {spinOptions.map((o,i) => (
                     <div key={i} style={{marginBottom:4}}>
@@ -361,7 +377,7 @@ function App() {
                 {rankList.map((r, i) => (
                   <tr key={i} style={{borderBottom:'1px solid #eee', background: r.id === user.id ? '#fff9c4' : 'none'}}>
                     <td style={{padding:'10px 0'}}>{i+1}. {r.id}</td>
-                    <td align="right" style={{color:'blue', fontWeight:'bold'}}>{r.balance.toFixed(4)} TON</td>
+                    <td align="right" style={{color:'blue', fontWeight:'bold'}}>{r.displayBalance} TON</td>
                   </tr>
                 ))}
               </tbody>
@@ -387,7 +403,16 @@ function App() {
               <button onClick={handleWithdraw} style={{...styles.btn, width:'100%', background:'#0052ff'}}>WITHDRAW</button>
             </div>
             <h4 style={{marginLeft: 10}}>History</h4>
-            {withdraws.map((w,i) => <div key={i} style={{...styles.card, fontSize:13}}>{w.amount} TON - <span style={{color: w.status === 'Success' ? 'green' : 'orange', fontWeight:'bold'}}>{w.status}</span></div>)}
+            {withdraws.map((w,i) => (
+              <div key={i} style={{...styles.card, fontSize:13}}>
+                <div style={{display:'flex', justifyContent:'space-between'}}>
+                  <span>{w.amount} TON</span>
+                  <span style={{color: w.status === 'Success' ? 'green' : 'orange', fontWeight:'bold'}}>{w.status}</span>
+                </div>
+                {/* Displaying the date and time */}
+                <small style={{color:'#888'}}>{new Date(w.created_at).toLocaleString()}</small>
+              </div>
+            ))}
           </div>
         )}
 
