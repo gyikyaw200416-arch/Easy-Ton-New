@@ -36,7 +36,6 @@ function App() {
   const [adminPromoCode, setAdminPromoCode] = useState('');
   const [adminPromoValue, setAdminPromoValue] = useState('');
 
-  // Spin Options matching visual segments
   const spinOptions = [
     { amt: 0.00009, color: '#007AFF', label: 'Blue' },   
     { amt: 0.0001, color: '#FF3B30', label: 'Red' },     
@@ -97,8 +96,7 @@ function App() {
   };
 
   /**
-   * FIXED: SPIN LOGIC
-   * We calculate the angle so the chosen index lands exactly at the 12 o'clock position (the arrow).
+   * UPDATED: SPIN LOGIC (Targets the segment to the LEFT of the arrow)
    */
   const handleSpin = async () => {
     if (timeLeft > 0) return alert("Please wait for the 2-hour cooldown!");
@@ -108,11 +106,11 @@ function App() {
     const randomIndex = Math.floor(Math.random() * spinOptions.length);
     const segmentAngle = 360 / spinOptions.length;
     
-    // Calculate rotation to make the segment stay at the top (0 degrees).
-    // Formula: (Full Spins) - (Index position)
-    const extraSpins = 3600; // 10 rotations
-    const offset = (randomIndex * segmentAngle);
-    const finalRotation = spinRotation + extraSpins - (spinRotation % 360) - offset;
+    const extraSpins = 3600; 
+    // To make the segment stop at the left side of the top arrow:
+    // We add an offset (approx 20-30 degrees) to shift the wheel
+    const leftOffset = segmentAngle / 2; 
+    const finalRotation = spinRotation + extraSpins - (spinRotation % 360) - (randomIndex * segmentAngle) + leftOffset;
     
     setSpinRotation(finalRotation);
 
@@ -158,8 +156,7 @@ function App() {
   };
 
   /**
-   * FIXED: VIP UPDATE
-   * Forces the update to Supabase and then refreshes the app state.
+   * FIXED: VIP & DATA UPDATE LOGIC
    */
   const handleUpdateUser = async () => {
     const { error } = await supabase.from('users').update({ 
@@ -169,12 +166,18 @@ function App() {
     
     if (!error) {
         alert("User Data Updated! ✅");
-        // Update local state if the admin is editing themselves
+        
+        // Update Search view locally
+        setSearchedUser(prev => ({ ...prev, balance: Number(editBal), is_vip: editVip }));
+        
+        // If editing self, update global state immediately
         if (targetId === user.id) {
           setUser(prev => ({ ...prev, balance: Number(editBal), is_vip: editVip }));
         }
-        handleCheckUser(); 
-        fetchAllData();
+        
+        fetchAllData(); 
+    } else {
+        alert("Update Failed: " + error.message);
     }
   };
 
@@ -239,14 +242,12 @@ function App() {
 
   return (
     <div style={styles.container}>
-      {/* Header Balance */}
       <div style={{background:'#000', color:'#fff', padding:20, borderRadius:20, textAlign:'center', marginBottom:15, border: '2px solid #fff'}}>
          <small style={{opacity:0.7}}>MY TOTAL BALANCE</small>
          <h1 style={{margin:'5px 0', fontSize:32}}>{user.balance.toFixed(5)} TON</h1>
          {user.is_vip && <span style={{color:'#facc15', fontSize:12, fontWeight:'bold'}}>⭐ VIP MEMBER</span>}
       </div>
 
-      {/* WATCH STATUS INDICATOR (VIP is Green when active) */}
       <div style={styles.watchText}>
         <span style={{ color: !user.is_vip ? '#28a745' : '#000' }}>Normal: 0.0003</span> | 
         <span style={{ color: user.is_vip ? '#28a745' : '#000' }}> VIP: 0.0008</span>
