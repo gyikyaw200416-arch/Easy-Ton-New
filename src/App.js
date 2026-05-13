@@ -36,21 +36,21 @@ function App() {
   const [adminPromoCode, setAdminPromoCode] = useState('');
   const [adminPromoValue, setAdminPromoValue] = useState('');
 
-  // Added requested 4 colors: Brown, Navy, Dark Green, Midnight Blue
+  // 13 segments now with new colors spaced out
   const spinOptions = [
     { amt: 0.00009, color: '#007AFF', label: 'Blue' },   
+    { amt: 0.0005, color: '#8B4513', label: 'Brown' },    // New
     { amt: 0.0001, color: '#FF3B30', label: 'Red' },     
+    { amt: 0.0007, color: '#000080', label: 'Navy Blue' }, // New
     { amt: 0.0002, color: '#FFD60A', label: 'Yellow' },  
+    { amt: 0.0008, color: '#006400', label: 'Dark Green' }, // New
     { amt: 0.0003, color: '#34C759', label: 'Green' },   
+    { amt: 0.0006, color: '#191970', label: 'Midnight Blue' }, // New
     { amt: 0.00004, color: '#000000', label: 'Black' },  
     { amt: 0.00008, color: '#FF9500', label: 'Orange' }, 
     { amt: 0.00007, color: '#AF52DE', label: 'Purple' }, 
     { amt: 0.0009, color: '#FF2D55', label: 'Pink' },    
-    { amt: 0.001, color: '#FFFFFF', label: 'White' },
-    { amt: 0.0005, color: '#8B4513', label: 'Brown' },        // အညို
-    { amt: 0.0007, color: '#000080', label: 'Navy Blue' },    // နက်ပြာ
-    { amt: 0.0008, color: '#006400', label: 'Dark Green' },   // စိမ်းပုတ်
-    { amt: 0.0006, color: '#191970', label: 'Midnight Blue' } // ပြာပုတ်
+    { amt: 0.001, color: '#FFFFFF', label: 'White' }     
   ];
 
   const fetchAllData = useCallback(async () => {
@@ -70,9 +70,7 @@ function App() {
     if (tData) setTasks(tData);
 
     const { data: rData } = await supabase.from('users').select('id, balance').order('balance', { ascending: false }).limit(50);
-    if (rData) {
-        setRankList(rData);
-    }
+    if (rData) setRankList(rData);
 
     const { data: wData } = await supabase.from('withdrawals').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
     if (wData) setWithdraws(wData);
@@ -91,16 +89,11 @@ function App() {
 
   const handleWatchAds = async () => {
     const reward = user.is_vip ? 0.0008 : 0.0003;
-    const { error } = await supabase.from('users').update({ balance: user.balance + reward }).eq('id', user.id);
-    if (error) return alert("Ad reward failed. Try again.");
+    await supabase.from('users').update({ balance: user.balance + reward }).eq('id', user.id);
     alert(`Success! Earned ${reward} TON ✅`);
     fetchAllData();
   };
 
-  /**
-   * FIXED: SPIN LOGIC (Exact Match)
-   * Ensures the segment middle stops exactly at the pointer.
-   */
   const handleSpin = async () => {
     if (timeLeft > 0) return alert("Please wait for the 2-hour cooldown!");
     if (isSpinning) return;
@@ -109,13 +102,9 @@ function App() {
     const randomIndex = Math.floor(Math.random() * spinOptions.length);
     const segmentAngle = 360 / spinOptions.length;
     
-    // Rotation Calculation:
-    // We want the wheel to spin several full circles and then land on the specific segment.
-    // 360 - (index * angle) puts the start of the segment at the top.
-    // Subtracting (angle / 2) centers it.
-    const fullSpins = 3600; 
-    const targetRotation = 360 - (randomIndex * segmentAngle) - (segmentAngle / 2);
-    const finalRotation = spinRotation + fullSpins + targetRotation - (spinRotation % 360);
+    // Exact rotation to point at the correct index on top
+    const extraSpins = 3600; 
+    const finalRotation = spinRotation + extraSpins - (spinRotation % 360) - (randomIndex * segmentAngle);
     
     setSpinRotation(finalRotation);
 
@@ -127,9 +116,9 @@ function App() {
       }).eq('id', user.id);
       
       if (error) {
-          alert("Database Error: Could not save spin result.");
+        alert("Spin failed to save!");
       } else {
-          alert(`Wheel landed on ${winner.label}! Added ${winner.amt} TON ✅`);
+        alert(`Wheel landed on ${winner.label}! Added ${winner.amt} TON ✅`);
       }
       setIsSpinning(false);
       fetchAllData();
@@ -164,26 +153,19 @@ function App() {
     }
   };
 
-  /**
-   * FIXED: VIP/BALANCE UPDATE
-   * If update fails, check if your Supabase RLS allows the "anon" key to update other rows.
-   */
   const handleUpdateUser = async () => {
     const { error } = await supabase.from('users').update({ 
-        balance: parseFloat(editBal), 
+        balance: Number(editBal), 
         is_vip: editVip 
     }).eq('id', targetId);
     
     if (!error) {
         alert("User Data Updated! ✅");
-        setSearchedUser(prev => ({ ...prev, balance: parseFloat(editBal), is_vip: editVip }));
-        if (targetId === user.id) {
-          setUser(prev => ({ ...prev, balance: parseFloat(editBal), is_vip: editVip }));
-        }
+        setSearchedUser(prev => ({ ...prev, balance: Number(editBal), is_vip: editVip }));
+        if (targetId === user.id) setUser(prev => ({ ...prev, balance: Number(editBal), is_vip: editVip }));
         fetchAllData(); 
     } else {
-        console.error(error);
-        alert(`Update Failed: ${error.message}`);
+        alert("Update Failed! Please check your connection.");
     }
   };
 
@@ -227,7 +209,7 @@ function App() {
     input: { width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '10px', border: '1px solid #000', boxSizing: 'border-box' },
     bottomNav: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#000', display: 'flex', justifyContent: 'space-around', padding: '10px', zIndex: 100 },
     navItem: (active) => ({ color: active ? '#facc15' : '#fff', textAlign: 'center', fontSize: '11px', fontWeight: 'bold', flex: 1, cursor: 'pointer' }),
-    dot: (c) => ({ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: c, border: '1px solid #000', marginRight: 5 }),
+    dot: (c) => ({ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: c, marginRight: 8, border: '1px solid #000' }),
     copyBtn: { background: '#eee', border: '1px solid #000', fontSize: '10px', padding: '2px 6px', marginLeft: '5px', borderRadius: '5px', cursor: 'pointer' },
     wheelWrapper: { position: 'relative', width: 220, height: 220, margin: '20px auto' },
     wheelArrow: { 
@@ -236,7 +218,7 @@ function App() {
         borderTop: '30px solid #000', zIndex: 10 
     },
     wheel: {
-        width: '100%', height: '100%', borderRadius: '50%', border: '4px solid #000',
+        width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000',
         background: `conic-gradient(${spinOptions.map((o, i) => `${o.color} ${i * (360/spinOptions.length)}deg ${(i+1) * (360/spinOptions.length)}deg`).join(', ')})`,
         transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)',
         transform: `rotate(${spinRotation}deg)`
@@ -248,7 +230,6 @@ function App() {
 
   return (
     <div style={styles.container}>
-      {/* Balance Section */}
       <div style={{background:'#000', color:'#fff', padding:20, borderRadius:20, textAlign:'center', marginBottom:15, border: '2px solid #fff'}}>
          <small style={{opacity:0.7}}>MY TOTAL BALANCE</small>
          <h1 style={{margin:'5px 0', fontSize:32}}>{user.balance.toFixed(5)} TON</h1>
@@ -256,8 +237,8 @@ function App() {
       </div>
 
       <div style={styles.watchText}>
-        <span style={{ color: !user.is_vip ? '#28a745' : '#000' }}>Normal: 0.0003</span> | 
-        <span style={{ color: user.is_vip ? '#28a745' : '#000' }}> VIP: 0.0008</span>
+        <span style={{ color: !user.is_vip ? '#28a745' : '#888' }}>Standard: 0.0003</span> | 
+        <span style={{ color: user.is_vip ? '#28a745' : '#888' }}> VIP: 0.0008</span>
       </div>
 
       <button onClick={handleWatchAds} style={{...styles.btn, width:'100%', background:'linear-gradient(to right, #ff416c, #ff4b2b)', marginBottom:15, height:50, fontSize:16, border:'2px solid #000'}}>
@@ -291,10 +272,10 @@ function App() {
                 <button onClick={handleSpin} style={{...styles.btn, width:'100%', background: timeLeft > 0 ? '#ccc' : '#00d2ff'}} disabled={isSpinning || timeLeft > 0}>
                   {isSpinning ? 'SPINNING...' : timeLeft > 0 ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'SPIN NOW'}
                 </button>
-                <div style={{textAlign:'left', marginTop:20, fontSize:11, display:'grid', gridTemplateColumns:'1fr 1fr', gap:5}}>
+                <div style={{textAlign:'left', marginTop:20, fontSize:11, display:'grid', gridTemplateColumns:'1fr 1fr'}}>
                   {spinOptions.map((o,i) => (
-                    <div key={i} style={{marginBottom:4, display:'flex', alignItems:'center'}}>
-                      <span style={styles.dot(o.color)}></span> {o.label.slice(0,8)}: <b>{o.amt}</b>
+                    <div key={i} style={{marginBottom:4}}>
+                      <span style={styles.dot(o.color)}></span> {o.amt}
                     </div>
                   ))}
                 </div>
@@ -348,6 +329,17 @@ function App() {
                 await supabase.from('promo_codes').insert([{code:adminPromoCode, value:Number(adminPromoValue), used_by:[]}]);
                 alert("Promo Code Created!");
               }}>CREATE PROMO</button>
+              <hr/>
+              <h4>Add Task</h4>
+              <input style={styles.input} placeholder="Name" value={taskName} onChange={e=>setTaskName(e.target.value)} />
+              <input style={styles.input} placeholder="Link" value={taskLink} onChange={e=>setTaskLink(e.target.value)} />
+              <select style={styles.input} value={taskType} onChange={e=>setTaskType(e.target.value)}>
+                <option value="bot">Bot</option><option value="social">Social</option>
+              </select>
+              <button style={{...styles.btn, width:'100%'}} onClick={async ()=>{
+                await supabase.from('global_tasks').insert([{name:taskName, link:taskLink, type:taskType}]);
+                alert("Task Added!"); fetchAllData();
+              }}>ADD TASK</button>
             </div>
           ) : (
             tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(t.id)).map(t => (
@@ -406,6 +398,16 @@ function App() {
               <input style={styles.input} placeholder="Amount (Min 0.1)" type="number" value={withdrawAmt} onChange={e=>setWithdrawAmt(e.target.value)} />
               <button onClick={handleWithdraw} style={{...styles.btn, width:'100%', background:'#0052ff'}}>WITHDRAW</button>
             </div>
+            <h4 style={{marginLeft: 10}}>History</h4>
+            {withdraws.map((w,i) => (
+              <div key={i} style={{...styles.card, fontSize:13}}>
+                <div style={{display:'flex', justifyContent:'space-between'}}>
+                  <span>{w.amount} TON</span>
+                  <span style={{color: w.status === 'Success' ? 'green' : 'orange', fontWeight:'bold'}}>{w.status}</span>
+                </div>
+                <small style={{color:'#888'}}>{new Date(w.created_at).toLocaleString()}</small>
+              </div>
+            ))}
           </div>
         )}
 
@@ -422,7 +424,6 @@ function App() {
         )}
       </div>
 
-      {/* Bottom Navigation */}
       <div style={styles.bottomNav}>
         <div onClick={()=>setMainTab('earn')} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
         <div onClick={()=>setMainTab('invite')} style={styles.navItem(mainTab==='invite')}>👥<br/>INVITE</div>
