@@ -96,7 +96,7 @@ function App() {
   };
 
   /**
-   * UPDATED: SPIN LOGIC (Targets the segment to the LEFT of the arrow)
+   * FIXED: SPIN LOGIC (Exact match with Arrow)
    */
   const handleSpin = async () => {
     if (timeLeft > 0) return alert("Please wait for the 2-hour cooldown!");
@@ -106,11 +106,9 @@ function App() {
     const randomIndex = Math.floor(Math.random() * spinOptions.length);
     const segmentAngle = 360 / spinOptions.length;
     
+    // Formula to make the selected randomIndex stop exactly at the top arrow (0 degrees)
     const extraSpins = 3600; 
-    // To make the segment stop at the left side of the top arrow:
-    // We add an offset (approx 20-30 degrees) to shift the wheel
-    const leftOffset = segmentAngle / 2; 
-    const finalRotation = spinRotation + extraSpins - (spinRotation % 360) - (randomIndex * segmentAngle) + leftOffset;
+    const finalRotation = spinRotation + extraSpins - (spinRotation % 360) - (randomIndex * segmentAngle);
     
     setSpinRotation(finalRotation);
 
@@ -156,7 +154,8 @@ function App() {
   };
 
   /**
-   * FIXED: VIP & DATA UPDATE LOGIC
+   * FIXED: VIP UPDATE LOGIC
+   * Ensures the UI and DB sync immediately.
    */
   const handleUpdateUser = async () => {
     const { error } = await supabase.from('users').update({ 
@@ -167,17 +166,17 @@ function App() {
     if (!error) {
         alert("User Data Updated! ✅");
         
-        // Update Search view locally
+        // Update local search result state
         setSearchedUser(prev => ({ ...prev, balance: Number(editBal), is_vip: editVip }));
         
-        // If editing self, update global state immediately
+        // If editing self (Admin), update global user state
         if (targetId === user.id) {
           setUser(prev => ({ ...prev, balance: Number(editBal), is_vip: editVip }));
         }
         
         fetchAllData(); 
     } else {
-        alert("Update Failed: " + error.message);
+        alert("Update Failed!");
     }
   };
 
@@ -242,12 +241,14 @@ function App() {
 
   return (
     <div style={styles.container}>
+      {/* Header Balance */}
       <div style={{background:'#000', color:'#fff', padding:20, borderRadius:20, textAlign:'center', marginBottom:15, border: '2px solid #fff'}}>
          <small style={{opacity:0.7}}>MY TOTAL BALANCE</small>
          <h1 style={{margin:'5px 0', fontSize:32}}>{user.balance.toFixed(5)} TON</h1>
          {user.is_vip && <span style={{color:'#facc15', fontSize:12, fontWeight:'bold'}}>⭐ VIP MEMBER</span>}
       </div>
 
+      {/* WATCH STATUS INDICATOR */}
       <div style={styles.watchText}>
         <span style={{ color: !user.is_vip ? '#28a745' : '#000' }}>Normal: 0.0003</span> | 
         <span style={{ color: user.is_vip ? '#28a745' : '#000' }}> VIP: 0.0008</span>
