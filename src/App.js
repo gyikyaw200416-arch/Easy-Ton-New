@@ -1,4 +1,4 @@
-Import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 // --- CONFIGURATION ---
@@ -74,6 +74,7 @@ function App() {
     }
     setUser(uData);
     
+    // Cooldown Logic
     const waitTime = 2 * 60 * 60 * 1000; 
     const diff = waitTime - (Date.now() - (uData.last_spin || 0));
     setTimeLeft(diff > 0 ? diff : 0);
@@ -99,13 +100,16 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
+  // Handle Watch Ads based on VIP status
   const handleWatchAds = async () => {
-    // Check VIP status from the current user state
     const reward = user.is_vip ? 0.0008 : 0.0003;
     const newBalance = user.balance + reward;
-    await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
-    setUser(prev => ({ ...prev, balance: newBalance }));
-    alert(`Success! Earned ${reward} TON ✅`);
+    const { error } = await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
+    
+    if(!error) {
+        setUser(prev => ({ ...prev, balance: newBalance }));
+        alert(`Success! Earned ${reward} TON ✅`);
+    }
     fetchAllData();
   };
 
@@ -117,10 +121,9 @@ function App() {
     const randomIndex = Math.floor(Math.random() * spinOptions.length);
     const segmentAngle = 360 / spinOptions.length;
     
-    // Logic: Calculate rotation to land exactly on the slice under the arrow
-    const extraSpins = 3600; // 10 full rotations
+    const extraSpins = 3600; 
     const currentRotationBase = spinRotation - (spinRotation % 360);
-    // formula: base + extra + (360 - offset) to bring selected index to top (0 deg)
+    // Adjusted to land exactly at the top (0 degrees)
     const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle));
     
     setSpinRotation(finalRotation);
@@ -145,6 +148,8 @@ function App() {
       fetchAllData();
     }, 4000);
   };
+
+  // --- EXISTING LOGIC MAINTAINED ---
 
   const handleRedeemPromo = async () => {
     const { data: promo } = await supabase.from('promo_codes').select('*').eq('code', promoCodeInput).single();
@@ -186,7 +191,6 @@ function App() {
     if (!error) {
         alert("User Data Updated! ✅");
         setSearchedUser(prev => ({ ...prev, ...updatedFields }));
-        // If current user is the one being edited, update state immediately
         if (targetId === user.id) {
             setUser(prev => ({ ...prev, ...updatedFields }));
         }
@@ -261,12 +265,14 @@ function App() {
 
   return (
     <div style={styles.container}>
+      {/* Header / Balance */}
       <div style={{background:'#000', color:'#fff', padding:20, borderRadius:20, textAlign:'center', marginBottom:15, border: '2px solid #fff'}}>
          <small style={{opacity:0.7}}>MY TOTAL BALANCE</small>
          <h1 style={{margin:'5px 0', fontSize:32}}>{user.balance.toFixed(5)} TON</h1>
          {user.is_vip && <span style={{color:'#facc15', fontSize:12, fontWeight:'bold'}}>⭐ VIP MEMBER</span>}
       </div>
 
+      {/* Ads Earning Logic Display - Colors update based on VIP status */}
       <div style={styles.watchText}>
         <span style={{ color: !user.is_vip ? '#28a745' : '#888' }}>Standard: 0.0003</span> | 
         <span style={{ color: user.is_vip ? '#28a745' : '#888' }}> VIP: 0.0008</span>
@@ -276,6 +282,7 @@ function App() {
         📺 WATCH ADS & EARN
       </button>
 
+      {/* Earn Sub-Tabs */}
       {mainTab === 'earn' && (
         <div style={{display:'flex', gap:5, marginBottom:15}}>
           {['bot', 'social', 'reward', 'admin'].map(tab => (
@@ -287,6 +294,7 @@ function App() {
         </div>
       )}
 
+      {/* Main Content Area */}
       <div style={{minHeight:'45vh'}}>
         {mainTab === 'earn' && (
           subTab === 'reward' ? (
@@ -449,6 +457,7 @@ function App() {
             <div style={{textAlign:'left', marginBottom:20, background: '#f9f9f9', padding: 15, borderRadius: 10}}>
                 <p><b>ID:</b> {user.id}</p>
                 <p><b>Balance:</b> {user.balance.toFixed(5)} TON</p>
+                {/* Status updates automatically based on is_vip state */}
                 <p><b>Status:</b> {user.is_vip ? <span style={{color: '#28a745', fontWeight: 'bold'}}>VIP ⭐</span> : "Standard User"}</p>
             </div>
             <button onClick={()=>window.open("https://t.me/EasyTonHelp_Bot")} style={{...styles.btn, width:'100%', background:'#0088cc'}}>SUPPORT</button>
@@ -456,6 +465,7 @@ function App() {
         )}
       </div>
 
+      {/* Bottom Nav */}
       <div style={styles.bottomNav}>
         <div onClick={()=>setMainTab('earn')} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
         <div onClick={()=>setMainTab('invite')} style={styles.navItem(mainTab==='invite')}>👥<br/>INVITE</div>
