@@ -36,16 +36,15 @@ function App() {
   const [adminPromoCode, setAdminPromoCode] = useState('');
   const [adminPromoValue, setAdminPromoValue] = useState('');
 
-  // 13 segments now with new colors spaced out
   const spinOptions = [
     { amt: 0.00009, color: '#007AFF', label: 'Blue' },   
-    { amt: 0.0005, color: '#8B4513', label: 'Brown' },    // New
+    { amt: 0.0005, color: '#8B4513', label: 'Brown' },    
     { amt: 0.0001, color: '#FF3B30', label: 'Red' },     
-    { amt: 0.0007, color: '#000080', label: 'Navy Blue' }, // New
+    { amt: 0.0007, color: '#000080', label: 'Navy Blue' }, 
     { amt: 0.0002, color: '#FFD60A', label: 'Yellow' },  
-    { amt: 0.0008, color: '#006400', label: 'Dark Green' }, // New
+    { amt: 0.0008, color: '#006400', label: 'Dark Green' }, 
     { amt: 0.0003, color: '#34C759', label: 'Green' },   
-    { amt: 0.0006, color: '#191970', label: 'Midnight Blue' }, // New
+    { amt: 0.0006, color: '#191970', label: 'Midnight Blue' }, 
     { amt: 0.00004, color: '#000000', label: 'Black' },  
     { amt: 0.00008, color: '#FF9500', label: 'Orange' }, 
     { amt: 0.00007, color: '#AF52DE', label: 'Purple' }, 
@@ -89,36 +88,43 @@ function App() {
 
   const handleWatchAds = async () => {
     const reward = user.is_vip ? 0.0008 : 0.0003;
-    await supabase.from('users').update({ balance: user.balance + reward }).eq('id', user.id);
+    const newBalance = user.balance + reward;
+    await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
+    setUser(prev => ({ ...prev, balance: newBalance }));
     alert(`Success! Earned ${reward} TON ✅`);
     fetchAllData();
   };
 
   const handleSpin = async () => {
-    if (timeLeft > 0) return alert("Please wait for the 2-hour cooldown!");
+    // Admin check: Admin can spin anytime
+    if (user.id !== ADMIN_ID && timeLeft > 0) return alert("Please wait for the 2-hour cooldown!");
     if (isSpinning) return;
 
     setIsSpinning(true);
     const randomIndex = Math.floor(Math.random() * spinOptions.length);
     const segmentAngle = 360 / spinOptions.length;
     
-    // Exact rotation to point at the correct index on top
     const extraSpins = 3600; 
-    const finalRotation = spinRotation + extraSpins - (spinRotation % 360) - (randomIndex * segmentAngle);
+    const currentRotationBase = spinRotation - (spinRotation % 360);
+    const finalRotation = currentRotationBase + extraSpins - (randomIndex * segmentAngle);
     
     setSpinRotation(finalRotation);
 
     setTimeout(async () => {
       const winner = spinOptions[randomIndex];
+      const newBalance = user.balance + winner.amt;
+      const now = Date.now();
+      
       const { error } = await supabase.from('users').update({ 
-        balance: user.balance + winner.amt, 
-        last_spin: Date.now() 
+        balance: newBalance, 
+        last_spin: now 
       }).eq('id', user.id);
       
-      if (error) {
-        alert("Spin failed to save!");
-      } else {
+      if (!error) {
+        setUser(prev => ({ ...prev, balance: newBalance, last_spin: now }));
         alert(`Wheel landed on ${winner.label}! Added ${winner.amt} TON ✅`);
+      } else {
+        alert("Database Error!");
       }
       setIsSpinning(false);
       fetchAllData();
@@ -131,8 +137,10 @@ function App() {
     if (promo.used_by?.includes(user.id)) return alert("Code already used!");
 
     const updatedUsedBy = [...(promo.used_by || []), user.id];
+    const newBalance = user.balance + promo.value;
     await supabase.from('promo_codes').update({ used_by: updatedUsedBy }).eq('code', promoCodeInput);
-    await supabase.from('users').update({ balance: user.balance + promo.value }).eq('id', user.id);
+    await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
+    setUser(prev => ({ ...prev, balance: newBalance }));
     alert(`Reward ${promo.value} TON Claimed! ✅`);
     setPromoCodeInput('');
     fetchAllData();
@@ -154,18 +162,21 @@ function App() {
   };
 
   const handleUpdateUser = async () => {
-    const { error } = await supabase.from('users').update({ 
+    const updatedFields = { 
         balance: Number(editBal), 
         is_vip: editVip 
-    }).eq('id', targetId);
+    };
+    const { error } = await supabase.from('users').update(updatedFields).eq('id', targetId);
     
     if (!error) {
         alert("User Data Updated! ✅");
-        setSearchedUser(prev => ({ ...prev, balance: Number(editBal), is_vip: editVip }));
-        if (targetId === user.id) setUser(prev => ({ ...prev, balance: Number(editBal), is_vip: editVip }));
+        setSearchedUser(prev => ({ ...prev, ...updatedFields }));
+        if (targetId === user.id) {
+            setUser(prev => ({ ...prev, ...updatedFields }));
+        }
         fetchAllData(); 
     } else {
-        alert("Update Failed! Please check your connection.");
+        alert("Update Failed!");
     }
   };
 
@@ -179,7 +190,9 @@ function App() {
     window.open(task.link);
     if (!user.completed_tasks?.includes(task.id)) {
         const updatedTasks = [...(user.completed_tasks || []), task.id];
-        await supabase.from('users').update({ balance: user.balance + 0.001, completed_tasks: updatedTasks }).eq('id', user.id);
+        const newBalance = user.balance + 0.001;
+        await supabase.from('users').update({ balance: newBalance, completed_tasks: updatedTasks }).eq('id', user.id);
+        setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
         alert("0.001 TON Added! ✅"); fetchAllData();
     }
   };
@@ -198,7 +211,9 @@ function App() {
         created_at: currentDate 
     }]);
     
-    await supabase.from('users').update({ balance: user.balance - amt }).eq('id', user.id);
+    const newBalance = user.balance - amt;
+    await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
+    setUser(prev => ({ ...prev, balance: newBalance }));
     alert("Withdrawal Requested! ✅"); fetchAllData();
   };
 
@@ -269,8 +284,8 @@ function App() {
                     <div style={styles.wheel}></div>
                 </div>
 
-                <button onClick={handleSpin} style={{...styles.btn, width:'100%', background: timeLeft > 0 ? '#ccc' : '#00d2ff'}} disabled={isSpinning || timeLeft > 0}>
-                  {isSpinning ? 'SPINNING...' : timeLeft > 0 ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'SPIN NOW'}
+                <button onClick={handleSpin} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#00d2ff'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
+                  {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'SPIN NOW'}
                 </button>
                 <div style={{textAlign:'left', marginTop:20, fontSize:11, display:'grid', gridTemplateColumns:'1fr 1fr'}}>
                   {spinOptions.map((o,i) => (
