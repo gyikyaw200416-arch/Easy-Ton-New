@@ -11,9 +11,10 @@ const ADMIN_ID = "1793453606";
 function App() {
   const [mainTab, setMainTab] = useState('earn');
   const [subTab, setSubTab] = useState('bot');
-  const [user, setUser] = useState({ id: tg?.initDataUnsafe?.user?.id?.toString() || "1793453606", balance: 0, is_vip: false });
+  const [user, setUser] = useState({ id: tg?.initDataUnsafe?.user?.id?.toString() || "1793453606", balance: 0, is_vip: false, invited_by: null });
   const [tasks, setTasks] = useState([]);
   const [withdraws, setWithdraws] = useState([]);
+  const [invites, setInvites] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Admin & Input States
@@ -23,18 +24,45 @@ function App() {
   const [taskName, setTaskName] = useState('');
   const [taskLink, setTaskLink] = useState('');
   const [taskType, setTaskType] = useState('bot');
+  const [promoCodeInput, setPromoCodeInput] = useState('');
+  const [adminPromoCode, setAdminPromoCode] = useState('');
+  const [adminPromoValue, setAdminPromoValue] = useState('');
 
   const fetchAllData = useCallback(async () => {
+    // 1. User Fetch & Referral Check
     let { data: uData } = await supabase.from('users').select('*').eq('id', user.id).single();
+    
     if (!uData) {
-        await supabase.from('users').insert([{ id: user.id, balance: 0 }]);
-    } else { setUser(uData); }
+        const startParam = tg?.initDataUnsafe?.start_param;
+        // Create new user
+        const { data: newUser } = await supabase.from('users').insert([{ 
+          id: user.id, 
+          balance: 0, 
+          invited_by: startParam || null 
+        }]).select().single();
+        
+        // If invited by someone, reward the inviter
+        if (startParam && startParam !== user.id) {
+            const { data: inviter } = await supabase.from('users').select('balance').eq('id', startParam).single();
+            if (inviter) {
+                await supabase.from('users').update({ balance: inviter.balance + 0.001 }).eq('id', startParam);
+            }
+        }
+        uData = newUser;
+    }
+    setUser(uData);
 
+    // 2. Fetch Tasks
     const { data: tData } = await supabase.from('global_tasks').select('*');
     if (tData) setTasks(tData);
 
+    // 3. Fetch Withdrawals
     const { data: wData } = await supabase.from('withdrawals').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
     if (wData) setWithdraws(wData);
+
+    // 4. Fetch Invites History
+    const { data: iData } = await supabase.from('users').select('id, created_at').eq('invited_by', user.id);
+    if (iData) setInvites(iData);
 
     setLoading(false);
   }, [user.id]);
@@ -74,13 +102,21 @@ function App() {
     fetchAllData();
   };
 
+  const handleAddPromo = async () => {
+    // This logic assumes you have a 'promo_codes' table
+    await supabase.from('promo_codes').insert([{ code: adminPromoCode, value: Number(adminPromoValue) }]);
+    alert("Promo Code Added! ✅");
+    setAdminPromoCode(''); setAdminPromoValue('');
+  };
+
   const styles = {
     container: { backgroundColor: '#facc15', minHeight: '100vh', padding: '15px', paddingBottom: '100px', fontFamily: 'sans-serif' },
     card: { background: '#fff', padding: '12px', borderRadius: '15px', border: '2px solid #000', marginBottom: '10px' },
     btn: { background: '#000', color: '#fff', padding: '10px', borderRadius: '10px', border: 'none', fontWeight: 'bold', cursor: 'pointer' },
     input: { width: '100%', padding: '10px', marginBottom: '8px', borderRadius: '8px', border: '1px solid #000', boxSizing: 'border-box' },
     bottomNav: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#000', display: 'flex', justifyContent: 'space-around', padding: '10px', zIndex: 100 },
-    navItem: (active) => ({ color: active ? '#facc15' : '#fff', textAlign: 'center', fontSize: '11px', fontWeight: 'bold', flex: 1 })
+    navItem: (active) => ({ color: active ? '#facc15' : '#fff', textAlign: 'center', fontSize: '11px', fontWeight: 'bold', flex: 1 }),
+    copyBtn: { background: '#eee', border: '1px solid #000', fontSize: '10px', padding: '2px 5px', marginLeft: '5px', borderRadius: '5px' }
   };
 
   if (loading) return <div style={{textAlign:'center', marginTop:50}}>Loading...</div>;
@@ -94,7 +130,10 @@ function App() {
          {user.is_vip && <span style={{color:'#facc15', fontSize:12, fontWeight:'bold'}}>⭐ VIP MEMBER</span>}
       </div>
 
-      {/* WATCH ADS BUTTON */}
+      {/* WATCH ADS SECTION */}
+      <div style={{textAlign:'center', marginBottom:10, fontSize:12, fontWeight:'bold'}}>
+        Rewards: Normal 0.0003 | VIP 0.0008 TON
+      </div>
       <button onClick={handleWatchAds} style={{...styles.btn, width:'100%', background:'linear-gradient(to right, #ff0000, #cc0000)', marginBottom:15, height:50, fontSize:16}}>
         📺 WATCH ADS & EARN
       </button>
@@ -124,6 +163,13 @@ function App() {
                 <option value="true">VIP Member ⭐</option>
               </select>
               <button style={{...styles.btn, width:'100%', background:'green'}} onClick={handleUpdateUser}>SAVE USER DATA</button>
+              
+              <hr style={{margin:'15px 0'}}/>
+              <h4>Manage Promo Code</h4>
+              <input style={styles.input} placeholder="Promo Code Name" value={adminPromoCode} onChange={e=>setAdminPromoCode(e.target.value)} />
+              <input style={styles.input} placeholder="Reward Value" type="number" value={adminPromoValue} onChange={e=>setAdminPromoValue(e.target.value)} />
+              <button style={{...styles.btn, width:'100%', background:'blue'}} onClick={handleAddPromo}>ADD PROMO CODE</button>
+
               <hr style={{margin:'15px 0'}}/>
               <h4>Add New Task</h4>
               <input style={styles.input} placeholder="Task Name" value={taskName} onChange={e=>setTaskName(e.target.value)} />
@@ -139,7 +185,7 @@ function App() {
             <div>
               <div style={styles.card}>
                 <h4>Redeem Code</h4>
-                <input style={styles.input} placeholder="Enter Code" />
+                <input style={styles.input} placeholder="Enter Code" value={promoCodeInput} onChange={e=>setPromoCodeInput(e.target.value)} />
                 <button style={{...styles.btn, width:'100%'}}>REDEEM</button>
               </div>
               <div style={{...styles.card, textAlign:'center'}}>
@@ -147,16 +193,6 @@ function App() {
                 <div style={{width:120, height:120, borderRadius:'50%', border:'5px solid #000', margin:'10px auto', background:'conic-gradient(red 0 36deg, blue 36deg 72deg, green 72deg 108deg, yellow 108deg 144deg, purple 144deg 180deg, orange 180deg 216deg, pink 216deg 252deg, cyan 252deg 288deg, brown 288deg 324deg, grey 324deg 360deg)'}}></div>
                 <button style={{...styles.btn, width:'80%'}}>SPIN NOW</button>
               </div>
-              {/* Admin tasks in reward */}
-              {tasks.filter(t => t.type === 'reward').map(t => (
-                <div key={t.id} style={styles.card}>
-                  <span>{t.name}</span>
-                  <div style={{float:'right'}}>
-                    {user.id === ADMIN_ID && <button onClick={()=>handleDeleteTask(t.id)} style={{background:'none', border:'none', color:'red', marginRight:10}}>🗑️</button>}
-                    <button onClick={()=>window.open(t.link)} style={styles.btn}>GO</button>
-                  </div>
-                </div>
-              ))}
             </div>
           ) : (
             tasks.filter(t => t.type === subTab).map(t => (
@@ -172,18 +208,43 @@ function App() {
         )}
 
         {mainTab === 'invite' && (
-          <div style={{...styles.card, textAlign:'center'}}>
-            <h3 style={{marginTop:0}}>Invite Friends</h3>
-            <p style={{fontSize:14}}>Share your link to earn more TON!</p>
-            <div style={{background:'#eee', padding:15, borderRadius:10, wordBreak:'break-all', marginBottom:15, border:'1px dashed #000'}}>
-              <code>https://t.me/EasyTONFree_Bot?start={user.id}</code>
+          <div>
+            <div style={{...styles.card, textAlign:'center'}}>
+              <h3 style={{marginTop:0}}>Invite & Earn</h3>
+              <p style={{fontSize:14, color:'green', fontWeight:'bold'}}>Earn 0.001 TON for each referral!</p>
+              <div style={{background:'#eee', padding:15, borderRadius:10, wordBreak:'break-all', marginBottom:15, border:'1px dashed #000'}}>
+                <code>https://t.me/EasyTONFree_Bot?start={user.id}</code>
+              </div>
+              <button onClick={() => {navigator.clipboard.writeText(`https://t.me/EasyTONFree_Bot?start=${user.id}`); alert("Link Copied!");}} style={{...styles.btn, width:'100%'}}>COPY LINK</button>
             </div>
-            <button onClick={() => {navigator.clipboard.writeText(`https://t.me/EasyTONFree_Bot?start=${user.id}`); alert("Copied!");}} style={{...styles.btn, width:'100%'}}>COPY LINK</button>
+            
+            <h4 style={{paddingLeft:10}}>Invite History ({invites.length})</h4>
+            {invites.length > 0 ? invites.map((inv, idx) => (
+              <div key={idx} style={{...styles.card, fontSize:12}}>
+                <span>User ID: {inv.id} joined</span>
+                <b style={{float:'right', color:'green'}}>+0.001 TON ✅</b>
+              </div>
+            )) : <p style={{textAlign:'center', fontSize:12, opacity:0.6}}>No referrals yet.</p>}
           </div>
         )}
 
         {mainTab === 'withdraw' && (
           <div>
+            {/* VIP DEPOSIT SECTION */}
+            <div style={{...styles.card, border: '2px solid gold', background: '#fffcf0'}}>
+                <h4 style={{margin: '0 0 10px 0', color: '#b8860b'}}>💎 VIP BUY - 1 TON Deposit</h4>
+                <div style={{fontSize: 12, marginBottom: 10}}>
+                  <b>Address:</b> 
+                  <span style={{wordBreak:'break-all'}}> UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9</span>
+                  <button style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText('UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9'); alert('Address Copied!');}}>Copy</button>
+                </div>
+                <div style={{fontSize: 12}}>
+                  <b>Memo:</b> <span>{user.id}</span>
+                  <button style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(user.id); alert('Memo Copied!');}}>Copy</button>
+                </div>
+                <p style={{fontSize: 10, color: 'red', marginTop: 5}}>*Memo must be correct to activate VIP!</p>
+            </div>
+
             <div style={styles.card}>
               <h4>Withdrawal</h4>
               <input style={styles.input} placeholder="Wallet Address" />
@@ -211,8 +272,12 @@ function App() {
                  <small>Status</small><br/><b>{user.is_vip ? "VIP ⭐" : "Standard"}</b>
                </div>
                <div style={{textAlign:'center'}}>
-                 <small>Earnings</small><br/><b>{user.balance.toFixed(4)}</b>
+                 <small>Earnings</small><br/><b>{user.balance.toFixed(4)} TON</b>
                </div>
+            </div>
+            <div style={{marginTop: 20, textAlign: 'center', fontSize: 13}}>
+              <p>Bot: <a href="https://t.me/EasyTONFree_Bot" style={{color: 'blue'}}>@EasyTONFree_Bot</a></p>
+              <p>Support: <a href="https://t.me/EasyTonHelp_Bot" style={{color: 'blue'}}>@EasyTonHelp_Bot</a></p>
             </div>
           </div>
         )}
