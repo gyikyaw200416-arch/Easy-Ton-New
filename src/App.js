@@ -116,11 +116,14 @@ function App() {
     const randomIndex = Math.floor(Math.random() * spinOptions.length);
     const segmentAngle = 360 / spinOptions.length;
     
-    const extraSpins = 3600; // 10 full rotations
+    // logic: extra spins + target position
+    const extraSpins = 3600; 
     const currentRotationBase = spinRotation - (spinRotation % 360);
     
-    // ADJUSTMENT: Arrow is at the top (-90 degrees offset from the standard 0 start)
-    const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle)) - 90;
+    // To select the color to the LEFT of the arrow:
+    // We add half a segment (segmentAngle / 2) to ensure the wheel stops 
+    // where the arrow points precisely into the center of the target slice.
+    const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle)) - (segmentAngle / 2) - 90;
     
     setSpinRotation(finalRotation);
 
