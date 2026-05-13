@@ -36,7 +36,7 @@ function App() {
   const [adminPromoCode, setAdminPromoCode] = useState('');
   const [adminPromoValue, setAdminPromoValue] = useState('');
 
-  // 1. Precise Spin Options Matching "1000067433.jpg"
+  // Spin Options matching visual segments
   const spinOptions = [
     { amt: 0.00009, color: '#007AFF', label: 'Blue' },   
     { amt: 0.0001, color: '#FF3B30', label: 'Red' },     
@@ -58,7 +58,6 @@ function App() {
     }
     setUser(uData);
     
-    // 2. Correct 2-hour Spin Cooldown logic
     const waitTime = 2 * 60 * 60 * 1000; 
     const diff = waitTime - (Date.now() - (uData.last_spin || 0));
     setTimeLeft(diff > 0 ? diff : 0);
@@ -97,7 +96,10 @@ function App() {
     fetchAllData();
   };
 
-  // 3. FIXED: Improved Spin Logic with Visual Alignment
+  /**
+   * FIXED: SPIN LOGIC
+   * We calculate the angle so the chosen index lands exactly at the 12 o'clock position (the arrow).
+   */
   const handleSpin = async () => {
     if (timeLeft > 0) return alert("Please wait for the 2-hour cooldown!");
     if (isSpinning) return;
@@ -106,10 +108,13 @@ function App() {
     const randomIndex = Math.floor(Math.random() * spinOptions.length);
     const segmentAngle = 360 / spinOptions.length;
     
-    // To land a segment under the top arrow, we need to rotate negative by its index
-    // adding multiple full rotations (360 * 10) for effect.
-    const newRotation = spinRotation + (360 * 10) - (randomIndex * segmentAngle);
-    setSpinRotation(newRotation);
+    // Calculate rotation to make the segment stay at the top (0 degrees).
+    // Formula: (Full Spins) - (Index position)
+    const extraSpins = 3600; // 10 rotations
+    const offset = (randomIndex * segmentAngle);
+    const finalRotation = spinRotation + extraSpins - (spinRotation % 360) - offset;
+    
+    setSpinRotation(finalRotation);
 
     setTimeout(async () => {
       const winner = spinOptions[randomIndex];
@@ -152,7 +157,10 @@ function App() {
     }
   };
 
-  // 4. FIXED: Admin Update now correctly updates VIP and Balance
+  /**
+   * FIXED: VIP UPDATE
+   * Forces the update to Supabase and then refreshes the app state.
+   */
   const handleUpdateUser = async () => {
     const { error } = await supabase.from('users').update({ 
         balance: Number(editBal), 
@@ -161,6 +169,10 @@ function App() {
     
     if (!error) {
         alert("User Data Updated! ✅");
+        // Update local state if the admin is editing themselves
+        if (targetId === user.id) {
+          setUser(prev => ({ ...prev, balance: Number(editBal), is_vip: editVip }));
+        }
         handleCheckUser(); 
         fetchAllData();
     }
@@ -234,7 +246,7 @@ function App() {
          {user.is_vip && <span style={{color:'#facc15', fontSize:12, fontWeight:'bold'}}>⭐ VIP MEMBER</span>}
       </div>
 
-      {/* 5. FIXED: WATCH STATUS INDICATOR */}
+      {/* WATCH STATUS INDICATOR (VIP is Green when active) */}
       <div style={styles.watchText}>
         <span style={{ color: !user.is_vip ? '#28a745' : '#000' }}>Normal: 0.0003</span> | 
         <span style={{ color: user.is_vip ? '#28a745' : '#000' }}> VIP: 0.0008</span>
