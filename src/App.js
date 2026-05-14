@@ -19,6 +19,7 @@ function App() {
   const [subTab, setSubTab] = useState('bot');
   const [user, setUser] = useState({ 
     id: tg?.initDataUnsafe?.user?.id?.toString() || "1793453606", 
+    username: tg?.initDataUnsafe?.user?.username || "Unknown",
     balance: 0, 
     is_vip: false, 
     completed_tasks: [], 
@@ -82,7 +83,7 @@ function App() {
             }
         }
         const { data: newUser } = await supabase.from('users').insert([{ 
-            id: user.id, balance: 0, invited_by: startParam, completed_tasks: [], last_spin: 0 
+            id: user.id, username: user.username, balance: 0, invited_by: startParam, completed_tasks: [], last_spin: 0 
         }]).select().single();
         uData = newUser;
     }
@@ -101,11 +102,11 @@ function App() {
     const { data: wData } = await supabase.from('withdrawals').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
     if (wData) setWithdraws(wData);
 
-    const { data: iData } = await supabase.from('users').select('id, balance').eq('invited_by', user.id);
+    const { data: iData } = await supabase.from('users').select('id, username, balance').eq('invited_by', user.id);
     if (iData) setInvites(iData);
 
     setLoading(false);
-  }, [user.id]);
+  }, [user.id, user.username]);
 
   useEffect(() => {
     fetchAllData();
@@ -127,7 +128,7 @@ function App() {
 
   const handleGlobalClick = () => {
     if (isAdWatching && adTimer > 0) {
-      alert(`Ad In Progress: ${adTimer}s remaining. Do not leave.`);
+      alert(`Watch the full time 20s ‼️\n(${adTimer}s remaining)`);
       window.open(currentAdUrl.current, '_blank');
     }
   };
@@ -183,29 +184,26 @@ function App() {
     });
   };
 
-  // --- FIXED TASK LOGIC (SINGLE USE + AD SYNC) ---
   const handleStartTask = (task) => {
     if (user.completed_tasks?.includes(task.id)) {
         return alert("Task already completed!");
     }
     
-    // Launch Task Link and Ad simultaneously
+    // Launch Task Link & Ad Simultaneously
     window.open(task.link, '_blank');
     
     triggerAd(20, async () => { 
         const updatedTasks = [...(user.completed_tasks || []), task.id];
         const newBalance = user.balance + 0.001;
         
-        const { error } = await supabase.from('users').update({ 
+        await supabase.from('users').update({ 
           balance: newBalance, 
           completed_tasks: updatedTasks 
         }).eq('id', user.id);
         
-        if(!error) {
-          setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
-          alert("Task Done! +0.001 TON Added ✅"); 
-          fetchAllData();
-        }
+        setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
+        alert("Task Done! +0.001 TON Added ✅"); 
+        fetchAllData();
     });
   };
 
@@ -265,6 +263,7 @@ function App() {
     wheelArrow: { position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
     wheel: { width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${spinOptions.map((o, i) => `${o.color} ${i * (360/spinOptions.length)}deg ${(i+1) * (360/spinOptions.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${spinRotation}deg)` },
     adOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.95)', zIndex: 9999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#fff', textAlign: 'center', padding: 20 },
+    dot: (color) => ({ height: 10, width: 10, backgroundColor: color, borderRadius: '50%', display: 'inline-block', marginRight: 5, border: '1px solid #000' })
   };
 
   if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>INITIALIZING...</div>;
@@ -275,7 +274,7 @@ function App() {
       {/* AD BLOCKER OVERLAY */}
       {isAdWatching && (
         <div style={styles.adOverlay}>
-          <h2 style={{color: '#facc15'}}>AD IN PROGRESS</h2>
+          <h2 style={{color: '#facc15'}}>Watch the full time 20s ‼️</h2>
           <div style={{fontSize: 60, margin: '20px 0'}}>{adTimer}s</div>
           <p>Please stay on the advertisement to claim your reward.</p>
           <button onClick={() => window.open(currentAdUrl.current, '_blank')} style={{...styles.btn, background: '#fff', color: '#000', marginTop: 20}}>RETURN TO AD</button>
@@ -286,6 +285,11 @@ function App() {
          <small style={{opacity:0.7}}>MY TOTAL BALANCE</small>
          <h1 style={{margin:'5px 0', fontSize:32}}>{user.balance.toFixed(5)} TON</h1>
          {user.is_vip && <span style={{color:'#facc15', fontSize:12, fontWeight:'bold'}}>⭐ VIP MEMBER</span>}
+      </div>
+
+      <div style={{textAlign: 'center', fontWeight: 'bold', marginBottom: 10, fontSize: 13}}>
+         <span style={{marginRight: 15, color: '#444'}}>Normal: 0.0003</span>
+         <span style={{color: '#b8860b'}}>VIP: 0.0008</span>
       </div>
 
       <button onClick={handleWatchAds} style={{...styles.btn, width:'100%', background:'linear-gradient(to right, #ff416c, #ff4b2b)', marginBottom:15, height:50, fontSize:16, border:'2px solid #000'}}>
@@ -312,6 +316,11 @@ function App() {
                 <button onClick={handleSpin} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#00d2ff'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
                   {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'SPIN NOW (20s AD)'}
                 </button>
+                <div style={{marginTop: 15, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', fontSize: '10px', textAlign: 'left'}}>
+                    {spinOptions.map((opt, i) => (
+                        <div key={i}><span style={styles.dot(opt.color)}></span> {opt.amt}</div>
+                    ))}
+                </div>
               </div>
           ) : subTab === 'admin' ? (
             <div style={styles.card}>
@@ -336,12 +345,6 @@ function App() {
               )}
               <hr/>
               <h4>Manage Tasks</h4>
-              {tasks.map(t => (
-                <div key={t.id} style={{display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #eee'}}>
-                   <span style={{fontSize:12}}>{t.name} ({t.type})</span>
-                   <button onClick={async () => { if(window.confirm("Delete?")){ await supabase.from('global_tasks').delete().eq('id', t.id); fetchAllData(); } }} style={{background:'red', color:'#fff', border:'none', borderRadius:5, fontSize:10}}>DELETE</button>
-                </div>
-              ))}
               <input style={styles.input} placeholder="Task Name" value={taskName} onChange={e=>setTaskName(e.target.value)} />
               <input style={styles.input} placeholder="Link" value={taskLink} onChange={e=>setTaskLink(e.target.value)} />
               <select style={styles.input} value={taskType} onChange={e=>setTaskType(e.target.value)}>
@@ -372,7 +375,7 @@ function App() {
             <button onClick={() => {navigator.clipboard.writeText(`https://t.me/EasyTONFree_Bot?start=${user.id}`); alert("Copied!");}} style={{...styles.btn, width:'100%'}}>COPY LINK</button>
             <div style={{marginTop:20, textAlign:'left'}}>
                <h4>Invite History</h4>
-               {invites.map((inv, i) => <div key={i} style={{fontSize:11, padding:5, borderBottom:'1px solid #eee'}}>User ID: {inv.id} <b style={{float:'right', color:'green'}}>+0.005 TON ✅</b></div>)}
+               {invites.map((inv, i) => <div key={i} style={{fontSize:11, padding:5, borderBottom:'1px solid #eee'}}>{inv.username || inv.id} <b style={{float:'right', color:'green'}}>+0.005 TON ✅</b></div>)}
             </div>
           </div>
         )}
@@ -425,6 +428,7 @@ function App() {
             <h3>Profile</h3>
             <div style={{textAlign:'left', marginBottom:20, background: '#f9f9f9', padding: 15, borderRadius: 10}}>
                 <p><b>ID:</b> {user.id}</p>
+                <p><b>Username:</b> @{user.username}</p>
                 <p><b>Balance:</b> {user.balance.toFixed(5)} TON</p>
                 <p><b>Status:</b> {user.is_vip ? "VIP ⭐" : "Standard User"}</p>
             </div>
