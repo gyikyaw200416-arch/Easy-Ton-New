@@ -116,7 +116,7 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- ANTI-CHEAT AD LOGIC ---
+  // --- AD ENGINE ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     const randomAd = AD_LINKS[Math.floor(Math.random() * AD_LINKS.length)];
@@ -129,7 +129,7 @@ function App() {
 
   const handleGlobalClick = () => {
     if (isAdWatching && adTimer > 0) {
-      alert("Watch the full time‼️");
+      alert("Watch the full time to get rewards! ⏳");
       window.open(currentAdUrl.current, '_blank');
     }
   };
@@ -204,17 +204,21 @@ function App() {
     });
   };
 
-  // --- REVISED TASK LOGIC: MANDATORY 20S AD FOR BOT/SOCIAL ---
-  const handleStartTask = async (task) => {
-    if (user.id !== ADMIN_ID && user.completed_tasks?.includes(task.id)) return alert("Task already completed!");
+  // --- TASK DONE LOGIC (FIXED) ---
+  const handleStartTask = (task) => {
+    // Check if already completed locally or on server
+    if (user.id !== ADMIN_ID && user.completed_tasks?.includes(task.id)) {
+        return alert("Task already completed!");
+    }
     
-    // First open the task link
+    // Open the task link first
     window.open(task.link, '_blank');
 
-    // Force 20 seconds ad watch before reward
-    triggerAd(20, async () => {
+    // Trigger the mandatory 25s Ad for Bot/Social Tasks
+    triggerAd(25, async () => {
         const updatedTasks = [...(user.completed_tasks || []), task.id];
         const newBalance = user.balance + 0.001;
+        
         const { error } = await supabase.from('users').update({ 
           balance: newBalance, 
           completed_tasks: updatedTasks 
@@ -222,8 +226,8 @@ function App() {
         
         if(!error) {
           setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
-          alert("Task Done! +0.001 TON Added ✅"); 
-          fetchAllData(); // Refresh to hide task
+          alert("Task Completed! +0.001 TON Added ✅"); 
+          fetchAllData(); // Refresh to hide the task
         }
     });
   };
@@ -357,6 +361,12 @@ function App() {
                     <option value="false">Standard</option><option value="true">VIP ⭐</option>
                   </select>
                   <button style={{...styles.btn, width:'100%', background:'green', marginBottom:15}} onClick={handleUpdateUser}>UPDATE DATA</button>
+                  {userWithdraws.map(w => (
+                    <div key={w.id} style={{fontSize:11, marginBottom:10, paddingBottom:5, borderBottom:'1px solid #eee'}}>
+                        {w.amount} TON to {w.address.slice(0,10)}...
+                        <button onClick={() => approveWithdraw(w.id)} style={{float:'right', background:'blue', color:'#fff', border:'none', padding:'4px 8px', borderRadius:5}}>Success</button>
+                    </div>
+                  ))}
                 </div>
               )}
               <hr/>
@@ -369,15 +379,26 @@ function App() {
               ))}
               <hr/>
               <h4>Add Task</h4>
-              <input style={styles.input} placeholder="Name" value={taskName} onChange={setTaskName}/>
-              <input style={styles.input} placeholder="Link" value={taskLink} onChange={setTaskLink}/>
-              <button onClick={async ()=>{
+              <input style={styles.input} placeholder="Name" value={taskName} onChange={e=>setTaskName(e.target.value)} />
+              <input style={styles.input} placeholder="Link" value={taskLink} onChange={e=>setTaskLink(e.target.value)} />
+              <select style={styles.input} value={taskType} onChange={e=>setTaskType(e.target.value)}>
+                <option value="bot">Bot</option><option value="social">Social</option>
+              </select>
+              <button style={{...styles.btn, width:'100%'}} onClick={async ()=>{
                 await supabase.from('global_tasks').insert([{name:taskName, link:taskLink, type:taskType}]);
                 alert("Task Added!"); fetchAllData();
               }}>ADD TASK</button>
+              <hr/>
+              <h4>Reward Code</h4>
+              <input style={styles.input} placeholder="Code Name" value={adminPromoCode} onChange={e=>setAdminPromoCode(e.target.value)} />
+              <input style={styles.input} placeholder="TON Value" type="number" value={adminPromoValue} onChange={e=>setAdminPromoValue(e.target.value)} />
+              <button style={{...styles.btn, width:'100%', background:'#ff9900'}} onClick={async ()=>{
+                await supabase.from('promo_codes').insert([{code:adminPromoCode, value:Number(adminPromoValue), used_by:[]}]);
+                alert("Promo Code Created!");
+              }}>CREATE PROMO</button>
             </div>
           ) : (
-            // FILTERS OUT COMPLETED TASKS SO THEY DON'T SHOW AGAIN
+            // TASK FILTERING: Only show tasks NOT completed by this user
             tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(t.id)).map(t => (
               <div key={t.id} style={styles.card}>
                 <span style={{fontWeight:'bold'}}>{t.name}</span>
@@ -395,13 +416,18 @@ function App() {
                 <code>https://t.me/EasyTONFree_Bot?start={user.id}</code>
             </div>
             <button onClick={() => {navigator.clipboard.writeText(`https://t.me/EasyTONFree_Bot?start=${user.id}`); alert("Copied!");}} style={{...styles.btn, width:'100%'}}>COPY LINK</button>
+            <div style={{marginTop:20, textAlign:'left'}}>
+               <h4>Invite History</h4>
+               {invites.map((inv, i) => <div key={i} style={{fontSize:11, padding:5, borderBottom:'1px solid #eee'}}>User ID: {inv.id} <b style={{float:'right', color:'green'}}>+0.005 TON ✅</b></div>)}
+            </div>
           </div>
         )}
 
         {mainTab === 'rank' && (
           <div style={styles.card}>
             <h3 style={{textAlign:'center', marginTop:0}}>🏆 TOP 50 RANKINGS</h3>
-            <table style={{width:'100%', fontSize:12}}>
+            <table style={{width:'100%', fontSize:12, borderCollapse:'collapse'}}>
+              <thead><tr style={{borderBottom:'2px solid #000'}}><th align="left">User ID</th><th align="right">Amount</th></tr></thead>
               <tbody>
                 {rankList.map((r, i) => (
                   <tr key={i} style={{borderBottom:'1px solid #eee', background: r.id === user.id ? '#fff9c4' : 'none'}}>
@@ -416,12 +442,27 @@ function App() {
 
         {mainTab === 'withdraw' && (
           <div>
+            <div style={{...styles.card, border: '2px solid gold', background: '#fffcf0'}}>
+                <h4 style={{margin:0, color: '#b8860b'}}>💎 UPGRADE VIP (1 TON)</h4>
+                <p style={{fontSize:11}}>UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9 
+                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText('UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9'); alert("Copied!");}}>COPY</span>
+                </p>
+                <p style={{fontSize:11}}>Memo: {user.id} 
+                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(user.id); alert("Copied!");}}>COPY</span>
+                </p>
+            </div>
             <div style={styles.card}>
               <h4>Withdraw TON</h4>
               <input style={styles.input} placeholder="TON Address" value={withdrawAddr} onChange={e=>setWithdrawAddr(e.target.value)} />
               <input style={styles.input} placeholder="Amount (Min 0.1)" type="number" value={withdrawAmt} onChange={e=>setWithdrawAmt(e.target.value)} />
               <button onClick={handleWithdraw} style={{...styles.btn, width:'100%', background:'#0052ff'}}>WITHDRAW</button>
             </div>
+            {withdraws.map((w,i) => (
+              <div key={i} style={{...styles.card, fontSize:13}}>
+                <div style={{display:'flex', justifyContent:'space-between'}}><span>{w.amount} TON</span><span style={{color: w.status === 'Success' ? 'green' : 'orange', fontWeight:'bold'}}>{w.status}</span></div>
+                <small style={{color:'#888'}}>{new Date(w.created_at).toLocaleString()}</small>
+              </div>
+            ))}
           </div>
         )}
 
@@ -431,19 +472,19 @@ function App() {
             <div style={{textAlign:'left', marginBottom:20, background: '#f9f9f9', padding: 15, borderRadius: 10}}>
                 <p><b>ID:</b> {user.id}</p>
                 <p><b>Balance:</b> {user.balance.toFixed(5)} TON</p>
-                <p><b>Status:</b> {user.is_vip ? "VIP ⭐" : "Standard"}</p>
+                <p><b>Status:</b> {user.is_vip ? <span style={{color: '#28a745', fontWeight: 'bold'}}>VIP ⭐</span> : "Standard User"}</p>
             </div>
+            <button onClick={()=>window.open("https://t.me/EasyTonHelp_Bot")} style={{...styles.btn, width:'100%', background:'#0088cc'}}>SUPPORT</button>
           </div>
         )}
       </div>
 
-      {/* Bottom Nav */}
       <div style={styles.bottomNav}>
-        <div onClick={()=>setMainTab('earn')} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
-        <div onClick={()=>setMainTab('invite')} style={styles.navItem(mainTab==='invite')}>👥<br/>INVITE</div>
-        <div onClick={()=>setMainTab('rank')} style={styles.navItem(mainTab==='rank')}>🏆<br/>RANK</div>
-        <div onClick={()=>setMainTab('withdraw')} style={styles.navItem(mainTab==='withdraw')}>💳<br/>CASH</div>
-        <div onClick={()=>setMainTab('profile')} style={styles.navItem(mainTab==='profile')}>👤<br/>PROFILE</div>
+        <div onClick={()=>triggerAd(10, () => setMainTab('earn'))} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
+        <div onClick={()=>triggerAd(10, () => setMainTab('invite'))} style={styles.navItem(mainTab==='invite')}>👥<br/>INVITE</div>
+        <div onClick={()=>triggerAd(10, () => setMainTab('rank'))} style={styles.navItem(mainTab==='rank')}>🏆<br/>RANK</div>
+        <div onClick={()=>triggerAd(10, () => setMainTab('withdraw'))} style={styles.navItem(mainTab==='withdraw')}>💳<br/>CASH</div>
+        <div onClick={()=>triggerAd(10, () => setMainTab('profile'))} style={styles.navItem(mainTab==='profile')}>👤<br/>PROFILE</div>
       </div>
     </div>
   );
