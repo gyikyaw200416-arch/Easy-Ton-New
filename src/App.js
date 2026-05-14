@@ -19,7 +19,6 @@ function App() {
   const [subTab, setSubTab] = useState('bot');
   const [user, setUser] = useState({ 
     id: tg?.initDataUnsafe?.user?.id?.toString() || "1793453606", 
-    username: tg?.initDataUnsafe?.user?.username || "Guest",
     balance: 0, 
     is_vip: false, 
     completed_tasks: [], 
@@ -83,7 +82,7 @@ function App() {
             }
         }
         const { data: newUser } = await supabase.from('users').insert([{ 
-            id: user.id, username: user.username, balance: 0, invited_by: startParam, completed_tasks: [], last_spin: 0 
+            id: user.id, balance: 0, invited_by: startParam, completed_tasks: [], last_spin: 0 
         }]).select().single();
         uData = newUser;
     }
@@ -102,12 +101,11 @@ function App() {
     const { data: wData } = await supabase.from('withdrawals').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
     if (wData) setWithdraws(wData);
 
-    // FIX 1: Correctly fetching invited users' usernames for history
-    const { data: iData } = await supabase.from('users').select('id, username, balance').eq('invited_by', user.id);
+    const { data: iData } = await supabase.from('users').select('id, balance').eq('invited_by', user.id);
     if (iData) setInvites(iData);
 
     setLoading(false);
-  }, [user.id, user.username]);
+  }, [user.id]);
 
   useEffect(() => {
     fetchAllData();
@@ -124,13 +122,6 @@ function App() {
     setAdTimer(duration);
     setPendingAction(() => callback);
     window.open(randomAd, '_blank');
-  };
-
-  const handleGlobalClick = () => {
-    if (isAdWatching && adTimer > 0) {
-      alert(`Watch the full time 20s ‼️\nRemaining: ${adTimer}s`);
-      window.open(currentAdUrl.current, '_blank');
-    }
   };
 
   useEffect(() => {
@@ -260,24 +251,22 @@ function App() {
     navItem: (active) => ({ color: active ? '#facc15' : '#fff', textAlign: 'center', fontSize: '11px', fontWeight: 'bold', flex: 1, cursor: 'pointer' }),
     copyBtn: { background: '#eee', border: '1px solid #000', fontSize: '10px', padding: '2px 6px', marginLeft: '5px', borderRadius: '5px', cursor: 'pointer' },
     wheelWrapper: { position: 'relative', width: 220, height: 220, margin: '20px auto' },
-    wheelArrow: { position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
+    // Arrow tilted slightly to the right
+    wheelArrow: { position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%) rotate(15deg)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
     wheel: { width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${spinOptions.map((o, i) => `${o.color} ${i * (360/spinOptions.length)}deg ${(i+1) * (360/spinOptions.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${spinRotation}deg)` },
-    // FIX 5: Ad Overlay is now solid black to prevent seeing the "second screen"
-    adOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: '#000', zIndex: 9999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#fff', textAlign: 'center', padding: 20 },
-    dot: (color) => ({ height: 10, width: 10, backgroundColor: color, borderRadius: '50%', display: 'inline-block', marginRight: 5, border: '1px solid #000' })
+    dot: (color) => ({ height: 10, width: 10, backgroundColor: color, borderRadius: '50%', display: 'inline-block', marginRight: 5, border: '1px solid #000' }),
+    // Background Status Text (instead of overlay)
+    bgStatus: { position: 'fixed', top: 10, right: 10, background: 'rgba(0,0,0,0.7)', color: '#fff', padding: '5px 10px', borderRadius: '5px', fontSize: '10px', zIndex: 1000 }
   };
 
   if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>INITIALIZING...</div>;
 
   return (
-    <div style={styles.container} onClick={handleGlobalClick}>
+    <div style={styles.container}>
       
       {isAdWatching && (
-        <div style={styles.adOverlay}>
-          <h2 style={{color: '#facc15'}}>Watch the full time ‼️</h2>
-          <div style={{fontSize: 60, margin: '20px 0'}}>{adTimer}s</div>
-          <p>Please stay on the advertisement to claim your reward.</p>
-          <button onClick={() => window.open(currentAdUrl.current, '_blank')} style={{...styles.btn, background: '#fff', color: '#000', marginTop: 20}}>RETURN TO AD</button>
+        <div style={styles.bgStatus}>
+          Ad Progress: {adTimer}s ⏳
         </div>
       )}
 
@@ -287,7 +276,6 @@ function App() {
          {user.is_vip && <span style={{color:'#facc15', fontSize:12, fontWeight:'bold'}}>⭐ VIP MEMBER</span>}
       </div>
 
-      {/* FIX 2: Text turns green based on user status */}
       <div style={{display:'flex', justifyContent:'center', gap:20, marginBottom:10, fontSize:12, fontWeight:'bold'}}>
          <span style={{color: !user.is_vip ? '#34C759' : '#000'}}>Normal: 0.0003 TON</span>
          <span style={{color: user.is_vip ? '#34C759' : '#000'}}>VIP: 0.0008 TON</span>
@@ -330,7 +318,6 @@ function App() {
                 <div style={{background:'#f0f9ff', padding:15, borderRadius:10, border:'1px solid #000', marginBottom:10}}>
                   <p>UID: {searchedUser.id}</p>
                   <input style={styles.input} type="number" value={editBal} onChange={e=>setEditBal(e.target.value)} />
-                  {/* FIX 3: Admin can change user back to Normal or VIP */}
                   <select style={styles.input} value={editVip} onChange={e=>setEditVip(e.target.value === 'true')}>
                     <option value="false">Normal (Standard)</option>
                     <option value="true">VIP ⭐</option>
@@ -363,11 +350,15 @@ function App() {
               }}>ADD TASK</button>
             </div>
           ) : (
-            // FIX 4: Filtering out tasks that are already in user.completed_tasks
-            tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(t.id)).map(t => (
+            // Social & Bot Tasks: Only one use allowed, shows DONE ✅
+            tasks.filter(t => t.type === subTab).map(t => (
               <div key={t.id} style={styles.card}>
                 <span style={{fontWeight:'bold'}}>{t.name}</span>
-                <button onClick={()=>handleStartTask(t)} style={{...styles.btn, float:'right', padding:'8px 15px'}}>START</button>
+                {user.completed_tasks?.includes(t.id) ? (
+                  <button style={{...styles.btn, float:'right', background:'#34C759', padding:'8px 15px'}} disabled>DONE ✅</button>
+                ) : (
+                  <button onClick={()=>handleStartTask(t)} style={{...styles.btn, float:'right', padding:'8px 15px'}}>START</button>
+                )}
               </div>
             ))
           )
@@ -384,9 +375,8 @@ function App() {
             <div style={{marginTop:20, textAlign:'left'}}>
                <h4>Invite History</h4>
                {invites.map((inv, i) => (
-                 // FIX 1: Showing invited username instead of ID
                  <div key={i} style={{fontSize:11, padding:5, borderBottom:'1px solid #eee'}}>
-                    User: @{inv.username || "User_"+inv.id.slice(0,5)} 
+                    User ID: {inv.id} 
                     <b style={{float:'right', color:'green'}}>+0.005 TON ✅</b>
                  </div>
                ))}
@@ -394,7 +384,6 @@ function App() {
           </div>
         )}
 
-        {/* --- Rank, Withdraw, Profile remain the same --- */}
         {mainTab === 'rank' && (
           <div style={styles.card}>
             <h3 style={{textAlign:'center', marginTop:0}}>🏆 TOP 50 RANKINGS</h3>
@@ -442,8 +431,7 @@ function App() {
           <div style={{...styles.card, textAlign:'center'}}>
             <h3>Profile</h3>
             <div style={{textAlign:'left', marginBottom:20, background: '#f9f9f9', padding: 15, borderRadius: 10}}>
-                <p><b>ID:</b> {user.id}</p>
-                <p><b>Username:</b> @{user.username}</p>
+                <p><b>User ID:</b> {user.id}</p>
                 <p><b>Balance:</b> {user.balance.toFixed(5)} TON</p>
                 <p><b>Status:</b> {user.is_vip ? "VIP ⭐" : "Standard User"}</p>
             </div>
