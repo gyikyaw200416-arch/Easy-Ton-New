@@ -9,7 +9,7 @@ const supabase = createClient(
 );
 const ADMIN_ID = "1793453606"; 
 
-// Ad Links for alternating: Adsterra and Advertic
+// Alternating Ad Links
 const AD_LINKS = [
   "https://data527.click/a674e1237b7e268eb5f6/ff9984d88d/?placementName=default",
   "https://www.profitablecpmratenetwork.com/pmi0yt9u?key=3580805003ccb6983acba9b61b6cb7e2"
@@ -54,7 +54,7 @@ function App() {
   const [adTimer, setAdTimer] = useState(0);
   const [pendingAction, setPendingAction] = useState(null);
   const currentAdUrl = useRef(AD_LINKS[0]);
-  const adToggle = useRef(0); 
+  const adToggle = useRef(0);
 
   const spinOptions = [
     { amt: 0.00009, color: '#007AFF', label: 'Blue' },   
@@ -115,7 +115,7 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // Trigger Ad with Alternating Logic
+  // Alternating Ad Logic
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     
@@ -189,15 +189,16 @@ function App() {
     });
   };
 
-  // Fixed: Open Link and Ad simultaneously. Add TON and change to DONE after 20s.
+  // --- CORE UPDATED TASK HANDLER ---
   const handleStartTask = (task) => {
     if (user.completed_tasks?.includes(task.id)) return;
     
-    // Open the Social/Bot task link
+    // 1. Start နိတ်တာနဲ့ Link ပွင့်မယ်
     window.open(task.link, '_blank');
     
-    // Trigger the 20s Ad immediately
+    // 2. ကြော်ငြာတက်မယ် (၂၀ စက္ကန့် စောင့်ရမယ်)
     triggerAd(20, async () => { 
+        // ၂၀ စက္ကန့်ပြည့်မှသာ ဒီထဲက logic တွေ အလုပ်လုပ်မယ်
         const updatedTasks = [...(user.completed_tasks || []), task.id];
         const newBalance = user.balance + 0.001;
         
@@ -208,7 +209,7 @@ function App() {
         
         if(!error) {
           setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
-          alert("Task Done! +0.001 TON Added ✅"); 
+          alert("Task Verified! +0.001 TON Added ✅"); 
           fetchAllData();
         }
     });
@@ -232,7 +233,6 @@ function App() {
     });
   };
 
-  // --- ADMIN TOOLS ---
   const handleCheckUser = async () => {
     if (!targetId) return;
     const { data: userData } = await supabase.from('users').select('*').eq('id', targetId).single();
@@ -334,7 +334,7 @@ function App() {
                   {userWithdraws.map(w => (
                     <div key={w.id} style={{fontSize:11, marginBottom:10}}>
                         {w.amount} TON to {w.address.slice(0,10)}...
-                        <button onClick={() => approveWithdraw(w.id)} style={{float:'right', background:'blue', color:'#fff'}}>Success</button>
+                        <button onClick={() => approveWithdraw(w.id)} style={{float:'right', background:'blue', color:'#fff', borderRadius:5, border:'none', padding:'3px 8px'}}>Success</button>
                     </div>
                   ))}
                 </div>
@@ -422,8 +422,8 @@ function App() {
             </div>
             <div style={styles.card}>
               <h4>Withdraw TON</h4>
-              <input style={styles.input} placeholder="TON Address" value={withdrawAddr} onChange={setWithdrawAddr} />
-              <input style={styles.input} placeholder="Amount (Min 0.1)" type="number" value={withdrawAmt} onChange={setWithdrawAmt} />
+              <input style={styles.input} placeholder="TON Address" value={withdrawAddr} onChange={e=>setWithdrawAddr(e.target.value)} />
+              <input style={styles.input} placeholder="Amount (Min 0.1)" type="number" value={withdrawAmt} onChange={e=>setWithdrawAmt(e.target.value)} />
               <button onClick={handleWithdraw} style={{...styles.btn, width:'100%', background:'#0052ff'}}>WITHDRAW (20s AD)</button>
             </div>
             {withdraws.map((w,i) => (
