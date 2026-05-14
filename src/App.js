@@ -51,7 +51,7 @@ function App() {
   const [adminPromoCode, setAdminPromoCode] = useState('');
   const [adminPromoValue, setAdminPromoValue] = useState('');
 
-  // --- AD ENGINE STATES ---
+  // --- AD ENGINE STATES (Timer UI ဖျောက်ထားသည်) ---
   const [isAdWatching, setIsAdWatching] = useState(false);
   const [adTimer, setAdTimer] = useState(0);
   const [pendingAction, setPendingAction] = useState(null);
@@ -116,9 +116,13 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- AD ENGINE ---
+  // --- AD ENGINE (Alert UI Only) ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
+    
+    // Alert မှာ ၂၀ စက္ကန့်စောင့်ရန် အသိပေးခြင်း
+    alert(`Please watch the ad for ${duration}s to get rewards! ⏳`);
+    
     const randomAd = AD_LINKS[Math.floor(Math.random() * AD_LINKS.length)];
     currentAdUrl.current = randomAd;
     setIsAdWatching(true);
@@ -129,7 +133,7 @@ function App() {
 
   const handleGlobalClick = () => {
     if (isAdWatching && adTimer > 0) {
-      alert("Watch the full time to get rewards! ⏳");
+      alert(`Stay on the ad! Still ${adTimer}s remaining... ⏳`);
       window.open(currentAdUrl.current, '_blank');
     }
   };
@@ -149,7 +153,7 @@ function App() {
   }, [isAdWatching, adTimer, pendingAction]);
 
   const handleWatchAds = () => {
-    triggerAd(30, async () => {
+    triggerAd(20, async () => {
       const reward = user.is_vip ? 0.0008 : 0.0003; 
       const newBalance = user.balance + reward;
       await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
@@ -188,6 +192,7 @@ function App() {
   };
 
   const handleRedeemPromo = () => {
+    // Reward Button (Promo) အတွက် Ads ထည့်သွင်းခြင်း
     triggerAd(20, async () => {
         const { data: promo } = await supabase.from('promo_codes').select('*').eq('code', promoCodeInput).single();
         if (!promo) return alert("Invalid Reward Code!");
@@ -204,18 +209,14 @@ function App() {
     });
   };
 
-  // --- TASK DONE LOGIC (FIXED) ---
   const handleStartTask = (task) => {
-    // Check if already completed locally or on server
     if (user.id !== ADMIN_ID && user.completed_tasks?.includes(task.id)) {
         return alert("Task already completed!");
     }
     
-    // Open the task link first
-    window.open(task.link, '_blank');
-
-    // Trigger the mandatory 25s Ad for Bot/Social Tasks
-    triggerAd(25, async () => {
+    // Social/Bot Tasks တွေအတွက် Ads logic ပြန်ညှိခြင်း
+    triggerAd(20, async () => {
+        window.open(task.link, '_blank');
         const updatedTasks = [...(user.completed_tasks || []), task.id];
         const newBalance = user.balance + 0.001;
         
@@ -227,13 +228,13 @@ function App() {
         if(!error) {
           setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
           alert("Task Completed! +0.001 TON Added ✅"); 
-          fetchAllData(); // Refresh to hide the task
+          fetchAllData();
         }
     });
   };
 
   const handleWithdraw = () => {
-    triggerAd(25, async () => {
+    triggerAd(20, async () => {
         const amt = Number(withdrawAmt);
         if (amt < 0.1) return alert("Minimum 0.1 TON");
         if (amt > user.balance) return alert("Insufficient Balance!");
@@ -289,7 +290,6 @@ function App() {
     wheelArrow: { position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
     wheel: { width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${spinOptions.map((o, i) => `${o.color} ${i * (360/spinOptions.length)}deg ${(i+1) * (360/spinOptions.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${spinRotation}deg)` },
     rewardStatusBox: { textAlign: 'center', marginBottom: 10, fontWeight: 'bold', fontSize: 13, display: 'flex', justifyContent: 'center', gap: '15px' },
-    timerBadge: { position: 'fixed', top: 20, right: 10, background: 'rgba(255,0,0,0.9)', color: '#fff', padding: '8px 15px', borderRadius: 20, fontSize: 14, zIndex: 10000, fontWeight: 'bold', boxShadow: '0 0 10px rgba(0,0,0,0.5)' }
   };
 
   if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>LOADING...</div>;
@@ -297,9 +297,7 @@ function App() {
   return (
     <div style={styles.container} onClick={handleGlobalClick}>
       
-      {isAdWatching && adTimer > 0 && (
-        <div style={styles.timerBadge}>⏳ Watch Ad: {adTimer}s</div>
-      )}
+      {/* Floating Timer Badge ကို ဖြုတ်လိုက်ပါပြီ */}
 
       <div style={{background:'#000', color:'#fff', padding:20, borderRadius:20, textAlign:'center', marginBottom:15, border: '2px solid #fff'}}>
          <small style={{opacity:0.7}}>MY TOTAL BALANCE</small>
@@ -320,7 +318,7 @@ function App() {
         <div style={{display:'flex', gap:5, marginBottom:15}}>
           {['bot', 'social', 'reward', 'admin'].map(tab => (
             (tab !== 'admin' || user.id === ADMIN_ID) && 
-            <button key={tab} onClick={() => { if(tab === 'reward' || tab === 'admin') setSubTab(tab); else triggerAd(10, () => setSubTab(tab)); }} style={{flex:1, padding:10, fontSize:10, borderRadius:10, background:subTab===tab?'#000':'#fff', color:subTab===tab?'#fff':'#000', border:'2px solid #000', fontWeight:'bold'}}>
+            <button key={tab} onClick={() => { if(tab === 'admin') setSubTab(tab); else triggerAd(10, () => setSubTab(tab)); }} style={{flex:1, padding:10, fontSize:10, borderRadius:10, background:subTab===tab?'#000':'#fff', color:subTab===tab?'#fff':'#000', border:'2px solid #000', fontWeight:'bold'}}>
               {tab.toUpperCase()}
             </button>
           ))}
@@ -398,7 +396,6 @@ function App() {
               }}>CREATE PROMO</button>
             </div>
           ) : (
-            // TASK FILTERING: Only show tasks NOT completed by this user
             tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(t.id)).map(t => (
               <div key={t.id} style={styles.card}>
                 <span style={{fontWeight:'bold'}}>{t.name}</span>
