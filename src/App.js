@@ -19,7 +19,7 @@ function App() {
   const [subTab, setSubTab] = useState('bot');
   const [user, setUser] = useState({ 
     id: tg?.initDataUnsafe?.user?.id?.toString() || "1793453606", 
-    username: tg?.initDataUnsafe?.user?.username || "Unknown",
+    username: tg?.initDataUnsafe?.user?.username || "Guest",
     balance: 0, 
     is_vip: false, 
     completed_tasks: [], 
@@ -89,7 +89,7 @@ function App() {
     }
     setUser(uData);
     
-    const waitTime = 2 * 60 * 60 * 1000; 
+    const waitTime = 1 * 60 * 60 * 1000; // 1 Hour Cooldown
     const diff = waitTime - (Date.now() - (uData.last_spin || 0));
     setTimeLeft(diff > 0 ? diff : 0);
 
@@ -128,7 +128,7 @@ function App() {
 
   const handleGlobalClick = () => {
     if (isAdWatching && adTimer > 0) {
-      alert(`Watch the full time 20s ‼️\n(${adTimer}s remaining)`);
+      alert(`Watch the full time 20s ‼️\nRemaining: ${adTimer}s`);
       window.open(currentAdUrl.current, '_blank');
     }
   };
@@ -189,21 +189,23 @@ function App() {
         return alert("Task already completed!");
     }
     
-    // Launch Task Link & Ad Simultaneously
+    // Launch Task Link & Ad simultaneously
     window.open(task.link, '_blank');
     
     triggerAd(20, async () => { 
         const updatedTasks = [...(user.completed_tasks || []), task.id];
         const newBalance = user.balance + 0.001;
         
-        await supabase.from('users').update({ 
+        const { error } = await supabase.from('users').update({ 
           balance: newBalance, 
           completed_tasks: updatedTasks 
         }).eq('id', user.id);
         
-        setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
-        alert("Task Done! +0.001 TON Added ✅"); 
-        fetchAllData();
+        if(!error) {
+          setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
+          alert("Task Done! +0.001 TON Added ✅"); 
+          fetchAllData();
+        }
     });
   };
 
@@ -287,9 +289,9 @@ function App() {
          {user.is_vip && <span style={{color:'#facc15', fontSize:12, fontWeight:'bold'}}>⭐ VIP MEMBER</span>}
       </div>
 
-      <div style={{textAlign: 'center', fontWeight: 'bold', marginBottom: 10, fontSize: 13}}>
-         <span style={{marginRight: 15, color: '#444'}}>Normal: 0.0003</span>
-         <span style={{color: '#b8860b'}}>VIP: 0.0008</span>
+      <div style={{display:'flex', justifyContent:'center', gap:20, marginBottom:10, fontSize:12, fontWeight:'bold'}}>
+         <span>Normal: 0.0003 TON</span>
+         <span style={{color:'#b8860b'}}>VIP: 0.0008 TON</span>
       </div>
 
       <button onClick={handleWatchAds} style={{...styles.btn, width:'100%', background:'linear-gradient(to right, #ff416c, #ff4b2b)', marginBottom:15, height:50, fontSize:16, border:'2px solid #000'}}>
@@ -316,10 +318,8 @@ function App() {
                 <button onClick={handleSpin} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#00d2ff'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
                   {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'SPIN NOW (20s AD)'}
                 </button>
-                <div style={{marginTop: 15, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', fontSize: '10px', textAlign: 'left'}}>
-                    {spinOptions.map((opt, i) => (
-                        <div key={i}><span style={styles.dot(opt.color)}></span> {opt.amt}</div>
-                    ))}
+                <div style={{display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:5, marginTop:20, fontSize:10, textAlign:'left'}}>
+                   {spinOptions.map((o,i) => <div key={i}><span style={styles.dot(o.color)}></span>{o.amt} TON</div>)}
                 </div>
               </div>
           ) : subTab === 'admin' ? (
@@ -345,6 +345,12 @@ function App() {
               )}
               <hr/>
               <h4>Manage Tasks</h4>
+              {tasks.map(t => (
+                <div key={t.id} style={{display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #eee'}}>
+                   <span style={{fontSize:12}}>{t.name} ({t.type})</span>
+                   <button onClick={async () => { if(window.confirm("Delete?")){ await supabase.from('global_tasks').delete().eq('id', t.id); fetchAllData(); } }} style={{background:'red', color:'#fff', border:'none', borderRadius:5, fontSize:10, padding:'3px 8px'}}>DELETE</button>
+                </div>
+              ))}
               <input style={styles.input} placeholder="Task Name" value={taskName} onChange={e=>setTaskName(e.target.value)} />
               <input style={styles.input} placeholder="Link" value={taskLink} onChange={e=>setTaskLink(e.target.value)} />
               <select style={styles.input} value={taskType} onChange={e=>setTaskType(e.target.value)}>
@@ -375,7 +381,7 @@ function App() {
             <button onClick={() => {navigator.clipboard.writeText(`https://t.me/EasyTONFree_Bot?start=${user.id}`); alert("Copied!");}} style={{...styles.btn, width:'100%'}}>COPY LINK</button>
             <div style={{marginTop:20, textAlign:'left'}}>
                <h4>Invite History</h4>
-               {invites.map((inv, i) => <div key={i} style={{fontSize:11, padding:5, borderBottom:'1px solid #eee'}}>{inv.username || inv.id} <b style={{float:'right', color:'green'}}>+0.005 TON ✅</b></div>)}
+               {invites.map((inv, i) => <div key={i} style={{fontSize:11, padding:5, borderBottom:'1px solid #eee'}}>User: @{inv.username || inv.id} <b style={{float:'right', color:'green'}}>+0.005 TON ✅</b></div>)}
             </div>
           </div>
         )}
@@ -401,7 +407,7 @@ function App() {
           <div>
             <div style={{...styles.card, border: '2px solid gold', background: '#fffcf0'}}>
                 <h4 style={{margin:0, color: '#b8860b'}}>💎 UPGRADE VIP (1 TON)</h4>
-                <p style={{fontSize:11}}>UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9 
+                <p style={{fontSize:11, wordBreak:'break-all'}}>UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9 
                   <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText('UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9'); alert("Copied!");}}>COPY</span>
                 </p>
                 <p style={{fontSize:11}}>Memo: {user.id} 
