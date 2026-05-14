@@ -115,12 +115,12 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // Alternating Ad Logic
+  // --- ALTERNATING AD LOGIC ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     
     const selectedAd = AD_LINKS[adToggle.current % 2];
-    adToggle.current += 1; 
+    adToggle.current += 1;
 
     currentAdUrl.current = selectedAd;
     setIsAdWatching(true);
@@ -189,16 +189,16 @@ function App() {
     });
   };
 
-  // --- CORE UPDATED TASK HANDLER ---
+  // --- UPDATED START TASK HANDLER (LINK + AD TOGETHER) ---
   const handleStartTask = (task) => {
     if (user.completed_tasks?.includes(task.id)) return;
     
-    // 1. Start နိတ်တာနဲ့ Link ပွင့်မယ်
+    // 1. Start နှိပ်တာနဲ့ Task Link ပွင့်မယ်
     window.open(task.link, '_blank');
     
-    // 2. ကြော်ငြာတက်မယ် (၂၀ စက္ကန့် စောင့်ရမယ်)
+    // 2. တစ်ပြိုင်နက်တည်း ကြော်ငြာပွင့်မယ် (၂၀ စက္ကန့် စောင့်ရမယ်)
     triggerAd(20, async () => { 
-        // ၂၀ စက္ကန့်ပြည့်မှသာ ဒီထဲက logic တွေ အလုပ်လုပ်မယ်
+        // ကြော်ငြာ ၂၀ စက္ကန့်ပြည့်မှသာ ဒီထဲက logic တွေ အလုပ်လုပ်မယ်
         const updatedTasks = [...(user.completed_tasks || []), task.id];
         const newBalance = user.balance + 0.001;
         
