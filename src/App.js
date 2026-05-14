@@ -112,7 +112,7 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- AD ENGINE (STRICT LOCK) ---
+  // --- AD ENGINE ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     
@@ -126,7 +126,7 @@ function App() {
 
   const handleGlobalClick = () => {
     if (isAdWatching && adTimer > 0) {
-      alert(`ကြော်ငြာကြည့်ရှုရန် ကျန်ရှိချိန်: ${adTimer}စက္ကန့်!`);
+      alert(`Please wait for the ad timer: ${adTimer}s remaining!`);
       window.open(currentAdUrl.current, '_blank');
     }
   };
@@ -184,11 +184,10 @@ function App() {
     });
   };
 
-  // --- FIXED TASK LOGIC ---
+  // --- TASK MANAGEMENT (FIXED) ---
   const handleStartTask = (task) => {
-    // Check if already completed (Ignore for admin testing)
     if (user.id !== ADMIN_ID && user.completed_tasks?.includes(task.id)) {
-        return alert("Task already completed!");
+        return alert("Already Completed!");
     }
     
     window.open(task.link, '_blank');
@@ -197,7 +196,6 @@ function App() {
         const updatedTasks = [...(user.completed_tasks || []), task.id];
         const newBalance = user.balance + 0.001;
         
-        // Update database with completed task ID to prevent multiple claims
         const { error } = await supabase.from('users').update({ 
           balance: newBalance, 
           completed_tasks: updatedTasks 
@@ -205,17 +203,26 @@ function App() {
         
         if(!error) {
           setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
-          alert("Task Done! +0.001 TON Added ✅"); 
+          alert("Success! +0.001 TON Added ✅"); 
           fetchAllData();
         }
     });
+  };
+
+  const handleDeleteTask = async (taskId) => {
+    if (!window.confirm("Delete this task?")) return;
+    const { error } = await supabase.from('global_tasks').delete().eq('id', taskId);
+    if (!error) {
+        alert("Task Removed!");
+        fetchAllData();
+    }
   };
 
   const handleWithdraw = () => {
     triggerAd(20, async () => {
         const amt = Number(withdrawAmt);
         if (amt < 0.1) return alert("Minimum 0.1 TON");
-        if (amt > user.balance) return alert("Low balance!");
+        if (amt > user.balance) return alert("Insufficient balance!");
         
         const currentDate = new Date().toISOString();
         await supabase.from('withdrawals').insert([{ 
@@ -224,7 +231,7 @@ function App() {
         const newBalance = user.balance - amt;
         await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
         setUser(prev => ({ ...prev, balance: newBalance }));
-        alert("Withdrawal Pending! ✅"); 
+        alert("Withdrawal Requested! ✅"); 
         fetchAllData();
     });
   };
@@ -242,18 +249,9 @@ function App() {
     const updatedFields = { balance: Number(editBal), is_vip: editVip };
     const { error } = await supabase.from('users').update(updatedFields).eq('id', targetId);
     if (!error) {
-        alert("User Data Updated! ✅");
+        alert("Data Updated! ✅");
         setSearchedUser(prev => ({ ...prev, ...updatedFields }));
         fetchAllData(); 
-    }
-  };
-
-  const handleDeleteTask = async (taskId) => {
-    if (!window.confirm("Delete this task?")) return;
-    const { error } = await supabase.from('global_tasks').delete().eq('id', taskId);
-    if (!error) {
-        alert("Task Deleted!");
-        fetchAllData();
     }
   };
 
@@ -274,41 +272,41 @@ function App() {
     spinInfoGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px', marginTop: 15, textAlign: 'left', fontSize: '11px', background: '#f9f9f9', padding: 10, borderRadius: 10 }
   };
 
-  if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>INITIALIZING...</div>;
+  if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold', color: '#000'}}>LOADING ASSETS...</div>;
 
   return (
     <div style={styles.container} onClick={handleGlobalClick}>
       
-      {/* STRICT AD OVERLAY */}
+      {/* AD OVERLAY */}
       {isAdWatching && (
         <div style={styles.overlay}>
-           <h2 style={{color: '#facc15'}}>ADVERTISING...</h2>
+           <h2 style={{color: '#facc15'}}>WATCHING AD...</h2>
            <div style={{fontSize: 60, fontWeight: 'bold', margin: '20px 0'}}>{adTimer}s</div>
-           <p>ကျေးဇူးပြု၍ ခေတ္တစောင့်ဆိုင်းပေးပါ...<br/>အချိန်ပြည့်မှ Reward ရရှိပါမည်။</p>
-           <button onClick={() => window.open(currentAdUrl.current, '_blank')} style={{...styles.btn, background: '#fff', color: '#000', marginTop: 20}}>RE-OPEN AD</button>
+           <p>Don't close! Reward adds when timer hits 0.</p>
+           <button onClick={() => window.open(currentAdUrl.current, '_blank')} style={{...styles.btn, background: '#fff', color: '#000', marginTop: 20}}>REFRESH AD</button>
         </div>
       )}
 
       <div style={{background:'#000', color:'#fff', padding:20, borderRadius:20, textAlign:'center', marginBottom:15, border: '2px solid #fff'}}>
-         <small style={{opacity:0.7}}>MY TOTAL BALANCE</small>
+         <small style={{opacity:0.7}}>MY BALANCE</small>
          <h1 style={{margin:'5px 0', fontSize:32}}>{user.balance.toFixed(5)} TON</h1>
-         {user.is_vip && <span style={{color:'#facc15', fontSize:12, fontWeight:'bold'}}>⭐ VIP MEMBER</span>}
+         {user.is_vip && <span style={{color:'#facc15', fontSize:12, fontWeight:'bold'}}>⭐ VIP ACCOUNT</span>}
       </div>
 
       <div style={styles.rewardStatusBox}>
-        <span style={{ color: !user.is_vip ? '#28a745' : '#888' }}>Normal: 0.0003</span>
+        <span style={{ color: !user.is_vip ? '#28a745' : '#888' }}>STD: 0.0003</span>
         <span style={{ color: user.is_vip ? '#28a745' : '#888' }}>VIP: 0.0008</span>
       </div>
 
       <button onClick={handleWatchAds} style={{...styles.btn, width:'100%', background:'linear-gradient(to right, #ff416c, #ff4b2b)', marginBottom:15, height:50, fontSize:16, border:'2px solid #000'}}>
-        📺 WATCH ADS & EARN (30s)
+        📺 EARN BY ADS (30s)
       </button>
 
       {mainTab === 'earn' && (
         <div style={{display:'flex', gap:5, marginBottom:15}}>
           {['bot', 'social', 'reward', 'admin'].map(tab => (
             (tab !== 'admin' || user.id === ADMIN_ID) && 
-            <button key={tab} onClick={() => { if(tab === 'admin') setSubTab(tab); else triggerAd(20, () => setSubTab(tab)); }} style={{flex:1, padding:10, fontSize:10, borderRadius:10, background:subTab===tab?'#000':'#fff', color:subTab===tab?'#fff':'#000', border:'2px solid #000', fontWeight:'bold'}}>
+            <button key={tab} onClick={() => setSubTab(tab)} style={{flex:1, padding:10, fontSize:10, borderRadius:10, background:subTab===tab?'#000':'#fff', color:subTab===tab?'#fff':'#000', border:'2px solid #000', fontWeight:'bold'}}>
               {tab.toUpperCase()}
             </button>
           ))}
@@ -322,10 +320,8 @@ function App() {
                 <h3 style={{marginTop:0}}>🎡 LUCKY SPIN</h3>
                 <div style={styles.wheelWrapper}><div style={styles.wheelArrow}></div><div style={styles.wheel}></div></div>
                 <button onClick={handleSpin} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#00d2ff'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
-                  {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'SPIN NOW (20s AD)'}
+                  {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `LOCKED (${Math.ceil(timeLeft/60000)}m)` : 'SPIN (20s AD)'}
                 </button>
-                
-                {/* SPIN INFO DOTS */}
                 <div style={styles.spinInfoGrid}>
                     {spinOptions.map((o,i) => (
                         <div key={i} style={{display:'flex', alignItems:'center'}}>
@@ -338,37 +334,36 @@ function App() {
           ) : subTab === 'admin' ? (
             <div style={styles.card}>
               <h3 style={{marginTop:0}}>Admin Panel</h3>
-              <input style={styles.input} placeholder="Search User UID" value={targetId} onChange={e=>setTargetId(e.target.value)} />
-              <button style={{...styles.btn, width:'100%', marginBottom:10}} onClick={handleCheckUser}>CHECK USER</button>
+              <input style={styles.input} placeholder="User UID" value={targetId} onChange={e=>setTargetId(e.target.value)} />
+              <button style={{...styles.btn, width:'100%', marginBottom:10}} onClick={handleCheckUser}>FIND USER</button>
               {searchedUser && (
                 <div style={{background:'#f0f9ff', padding:15, borderRadius:10, border:'1px solid #000', marginBottom:10}}>
                   <p>UID: {searchedUser.id}</p>
                   <input style={styles.input} type="number" value={editBal} onChange={e=>setEditBal(e.target.value)} />
                   <select style={styles.input} value={editVip} onChange={e=>setEditVip(e.target.value === 'true')}>
-                    <option value="false">Standard</option><option value="true">VIP ⭐</option>
+                    <option value="false">Standard</option><option value="true">VIP</option>
                   </select>
-                  <button style={{...styles.btn, width:'100%', background:'green'}} onClick={handleUpdateUser}>UPDATE DATA</button>
+                  <button style={{...styles.btn, width:'100%', background:'green'}} onClick={handleUpdateUser}>SAVE USER</button>
                 </div>
               )}
               <hr/>
-              <h4 style={{margin:'10px 0'}}>Current Tasks (Manage)</h4>
+              <h4>Active Tasks</h4>
               {tasks.map(t => (
-                <div key={t.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px solid #eee'}}>
-                    <small>{t.name} ({t.type})</small>
-                    <button onClick={() => handleDeleteTask(t.id)} style={{background:'red', color:'#fff', border:'none', borderRadius:5, padding:'2px 8px', fontSize:10}}>DELETE</button>
+                <div key={t.id} style={{display:'flex', justifyContent:'space-between', marginBottom:5, fontSize:12}}>
+                    <span>{t.name}</span>
+                    <button onClick={() => handleDeleteTask(t.id)} style={{color:'red', border:'none', background:'none', cursor:'pointer'}}>DELETE</button>
                 </div>
               ))}
               <hr/>
-              <h4 style={{margin:'10px 0'}}>Add New Task</h4>
-              <input style={styles.input} placeholder="Task Name" value={taskName} onChange={e=>setTaskName(e.target.value)} />
-              <input style={styles.input} placeholder="Link" value={taskLink} onChange={e=>setTaskLink(e.target.value)} />
+              <input style={styles.input} placeholder="Task Title" value={taskName} onChange={e=>setTaskName(e.target.value)} />
+              <input style={styles.input} placeholder="URL Link" value={taskLink} onChange={e=>setTaskLink(e.target.value)} />
               <select style={styles.input} value={taskType} onChange={e=>setTaskType(e.target.value)}>
                 <option value="bot">Bot</option><option value="social">Social</option>
               </select>
               <button style={{...styles.btn, width:'100%'}} onClick={async ()=>{
                 await supabase.from('global_tasks').insert([{name:taskName, link:taskLink, type:taskType}]);
                 alert("Task Added!"); setTaskName(''); setTaskLink(''); fetchAllData();
-              }}>ADD TASK</button>
+              }}>CREATE TASK</button>
             </div>
           ) : (
             tasks.filter(t => t.type === subTab).map(t => {
@@ -376,7 +371,7 @@ function App() {
                 return (
                     <div key={t.id} style={styles.card}>
                         <span style={{fontWeight:'bold'}}>{t.name}</span>
-                        <button onClick={()=>handleStartTask(t)} disabled={isDone} style={{...styles.btn, float:'right', padding:'8px 15px', background: isDone ? '#444' : '#000'}}>
+                        <button onClick={()=>handleStartTask(t)} disabled={isDone} style={{...styles.btn, float:'right', padding:'8px 15px', background: isDone ? '#555' : '#000'}}>
                             {isDone ? 'DONE ✅' : 'START'}
                         </button>
                     </div>
@@ -387,24 +382,24 @@ function App() {
 
         {mainTab === 'invite' && (
           <div style={{...styles.card, textAlign:'center'}}>
-            <h3>Invite & Earn</h3>
-            <p style={{color:'green', fontWeight:'bold'}}>Invite Friend: +0.005 TON Reward!</p>
-            <div style={{background:'#eee', padding:15, borderRadius:10, wordBreak:'break-all', marginBottom:15}}>
+            <h3>Referral System</h3>
+            <p style={{color:'green', fontWeight:'bold'}}>Reward: +0.005 TON per Invite!</p>
+            <div style={{background:'#eee', padding:15, borderRadius:10, wordBreak:'break-all', marginBottom:15, fontSize:12}}>
                 <code>https://t.me/EasyTONFree_Bot?start={user.id}</code>
             </div>
-            <button onClick={() => {navigator.clipboard.writeText(`https://t.me/EasyTONFree_Bot?start=${user.id}`); alert("Copied!");}} style={{...styles.btn, width:'100%'}}>COPY LINK</button>
+            <button onClick={() => {navigator.clipboard.writeText(`https://t.me/EasyTONFree_Bot?start=${user.id}`); alert("Copied!");}} style={{...styles.btn, width:'100%'}}>COPY REFERRAL LINK</button>
             <div style={{marginTop:20, textAlign:'left'}}>
-               <h4>Invite History</h4>
-               {invites.map((inv, i) => <div key={i} style={{fontSize:11, padding:5, borderBottom:'1px solid #eee'}}>User ID: {inv.id} <b style={{float:'right', color:'green'}}>+0.005 TON ✅</b></div>)}
+               <h4>Recent Invites</h4>
+               {invites.map((inv, i) => <div key={i} style={{fontSize:11, padding:5, borderBottom:'1px solid #eee'}}>ID: {inv.id} <b style={{float:'right', color:'green'}}>Confirmed</b></div>)}
             </div>
           </div>
         )}
 
         {mainTab === 'rank' && (
           <div style={styles.card}>
-            <h3 style={{textAlign:'center', marginTop:0}}>🏆 TOP 50 RANKINGS</h3>
+            <h3 style={{textAlign:'center', marginTop:0}}>🏆 GLOBAL RANKINGS</h3>
             <table style={{width:'100%', fontSize:12, borderCollapse:'collapse'}}>
-              <thead><tr style={{borderBottom:'2px solid #000'}}><th align="left">User ID</th><th align="right">Amount</th></tr></thead>
+              <thead><tr style={{borderBottom:'2px solid #000'}}><th align="left">ID</th><th align="right">Balance</th></tr></thead>
               <tbody>
                 {rankList.map((r, i) => (
                   <tr key={i} style={{borderBottom:'1px solid #eee', background: r.id === user.id ? '#fff9c4' : 'none'}}>
@@ -421,23 +416,21 @@ function App() {
           <div>
             <div style={{...styles.card, border: '2px solid gold', background: '#fffcf0'}}>
                 <h4 style={{margin:0, color: '#b8860b'}}>💎 UPGRADE VIP (1 TON)</h4>
-                <p style={{fontSize:11}}>UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9 
-                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText('UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9'); alert("Copied!");}}>COPY</span>
-                </p>
-                <p style={{fontSize:11}}>Memo: {user.id} 
-                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(user.id); alert("Copied!");}}>COPY</span>
-                </p>
+                <p style={{fontSize:10, wordBreak:'break-all'}}>UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9</p>
+                <button style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText('UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9'); alert("Address Copied!");}}>COPY ADDR</button>
+                <p style={{fontSize:11, marginTop:5}}>Memo: {user.id}</p>
+                <button style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(user.id); alert("Memo Copied!");}}>COPY MEMO</button>
             </div>
             <div style={styles.card}>
-              <h4>Withdraw TON</h4>
-              <input style={styles.input} placeholder="TON Address" value={withdrawAddr} onChange={e=>setWithdrawAddr(e.target.value)} />
+              <h4>Cash Out TON</h4>
+              <input style={styles.input} placeholder="Destination Address" value={withdrawAddr} onChange={e=>setWithdrawAddr(e.target.value)} />
               <input style={styles.input} placeholder="Amount (Min 0.1)" type="number" value={withdrawAmt} onChange={e=>setWithdrawAmt(e.target.value)} />
               <button onClick={handleWithdraw} style={{...styles.btn, width:'100%', background:'#0052ff'}}>WITHDRAW (20s AD)</button>
             </div>
             {withdraws.map((w,i) => (
-              <div key={i} style={{...styles.card, fontSize:13}}>
-                <div style={{display:'flex', justifyContent:'space-between'}}><span>{w.amount} TON</span><span style={{color: w.status === 'Success' ? 'green' : 'orange', fontWeight:'bold'}}>{w.status}</span></div>
-                <small style={{color:'#888'}}>{new Date(w.created_at).toLocaleString()}</small>
+              <div key={i} style={{...styles.card, fontSize:12}}>
+                <div style={{display:'flex', justifyContent:'space-between'}}><span>{w.amount} TON</span><span style={{color: w.status === 'Success' ? 'green' : 'orange'}}>{w.status}</span></div>
+                <small style={{color:'#888'}}>{new Date(w.created_at).toDateString()}</small>
               </div>
             ))}
           </div>
@@ -445,23 +438,23 @@ function App() {
 
         {mainTab === 'profile' && (
           <div style={{...styles.card, textAlign:'center'}}>
-            <h3>Profile</h3>
-            <div style={{textAlign:'left', marginBottom:20, background: '#f9f9f9', padding: 15, borderRadius: 10}}>
-                <p><b>ID:</b> {user.id}</p>
-                <p><b>Balance:</b> {user.balance.toFixed(5)} TON</p>
-                <p><b>Status:</b> {user.is_vip ? "VIP ⭐" : "Standard User"}</p>
+            <h3>My Stats</h3>
+            <div style={{textAlign:'left', marginBottom:20, background: '#f9f9f9', padding: 15, borderRadius: 10, fontSize: 13}}>
+                <p><b>User ID:</b> {user.id}</p>
+                <p><b>Total TON:</b> {user.balance.toFixed(5)}</p>
+                <p><b>Account:</b> {user.is_vip ? "VIP Member" : "Free User"}</p>
             </div>
-            <button onClick={()=>window.open("https://t.me/EasyTonHelp_Bot")} style={{...styles.btn, width:'100%', background:'#0088cc'}}>SUPPORT</button>
+            <button onClick={()=>window.open("https://t.me/EasyTonHelp_Bot")} style={{...styles.btn, width:'100%', background:'#0088cc'}}>CONTACT SUPPORT</button>
           </div>
         )}
       </div>
 
       <div style={styles.bottomNav}>
-        <div onClick={()=>triggerAd(20, () => setMainTab('earn'))} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
-        <div onClick={()=>triggerAd(20, () => setMainTab('invite'))} style={styles.navItem(mainTab==='invite')}>👥<br/>INVITE</div>
-        <div onClick={()=>triggerAd(20, () => setMainTab('rank'))} style={styles.navItem(mainTab==='rank')}>🏆<br/>RANK</div>
-        <div onClick={()=>triggerAd(20, () => setMainTab('withdraw'))} style={styles.navItem(mainTab==='withdraw')}>💳<br/>CASH</div>
-        <div onClick={()=>triggerAd(20, () => setMainTab('profile'))} style={styles.navItem(mainTab==='profile')}>👤<br/>PROFILE</div>
+        <div onClick={()=>setMainTab('earn')} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
+        <div onClick={()=>setMainTab('invite')} style={styles.navItem(mainTab==='invite')}>👥<br/>REFER</div>
+        <div onClick={()=>setMainTab('rank')} style={styles.navItem(mainTab==='rank')}>🏆<br/>RANK</div>
+        <div onClick={()=>setMainTab('withdraw')} style={styles.navItem(mainTab==='withdraw')}>💳<br/>CASH</div>
+        <div onClick={()=>setMainTab('profile')} style={styles.navItem(mainTab==='profile')}>👤<br/>USER</div>
       </div>
     </div>
   );
