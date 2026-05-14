@@ -26,7 +26,6 @@ function App() {
   });
   
   const [tasks, setTasks] = useState([]);
-  const [promoCodes, setPromoCodes] = useState([]);
   const [withdraws, setWithdraws] = useState([]);
   const [invites, setInvites] = useState([]);
   const [rankList, setRankList] = useState([]);
@@ -34,7 +33,6 @@ function App() {
 
   const [withdrawAddr, setWithdrawAddr] = useState('');
   const [withdrawAmt, setWithdrawAmt] = useState('');
-  const [promoCodeInput, setPromoCodeInput] = useState('');
   
   const [isSpinning, setIsSpinning] = useState(false);
   const [spinRotation, setSpinRotation] = useState(0); 
@@ -49,8 +47,6 @@ function App() {
   const [taskName, setTaskName] = useState('');
   const [taskLink, setTaskLink] = useState('');
   const [taskType, setTaskType] = useState('bot');
-  const [adminPromoCode, setAdminPromoCode] = useState('');
-  const [adminPromoValue, setAdminPromoValue] = useState('');
 
   // --- AD ENGINE STATES ---
   const [isAdWatching, setIsAdWatching] = useState(false);
@@ -99,9 +95,6 @@ function App() {
     const { data: tData } = await supabase.from('global_tasks').select('*');
     if (tData) setTasks(tData);
 
-    const { data: pData } = await supabase.from('promo_codes').select('*');
-    if (pData) setPromoCodes(pData);
-
     const { data: rData } = await supabase.from('users').select('id, balance').order('balance', { ascending: false }).limit(50);
     if (rData) setRankList(rData);
 
@@ -134,7 +127,7 @@ function App() {
 
   const handleGlobalClick = () => {
     if (isAdWatching && adTimer > 0) {
-      alert(`Finish the advertisement first! Time left: ${adTimer}s`);
+      alert(`ကြော်ငြာကြည့်ရန် ${adTimer}s စက္ကန့် ကျန်ပါသေးသည်။`);
       window.open(currentAdUrl.current, '_blank');
     }
   };
@@ -181,44 +174,25 @@ function App() {
           const winner = spinOptions[randomIndex];
           const newBalance = user.balance + winner.amt;
           const now = Date.now();
-          const { error } = await supabase.from('users').update({ balance: newBalance, last_spin: now }).eq('id', user.id);
-          if (!error) {
-            setUser(prev => ({ ...prev, balance: newBalance, last_spin: now }));
-            alert(`Landed on ${winner.label}! +${winner.amt} TON ✅`);
-          }
+          await supabase.from('users').update({ balance: newBalance, last_spin: now }).eq('id', user.id);
+          setUser(prev => ({ ...prev, balance: newBalance, last_spin: now }));
+          alert(`Landed on ${winner.label}! +${winner.amt} TON ✅`);
           setIsSpinning(false);
           fetchAllData();
         }, 4000);
     });
   };
 
-  const handleRedeemPromo = () => {
-    triggerAd(20, async () => {
-        const { data: promo } = await supabase.from('promo_codes').select('*').eq('code', promoCodeInput).single();
-        if (!promo) return alert("Invalid Code!");
-        if (promo.used_by?.includes(user.id)) return alert("Already claimed!");
-
-        const updatedUsedBy = [...(promo.used_by || []), user.id];
-        const newBalance = user.balance + promo.value;
-        await supabase.from('promo_codes').update({ used_by: updatedUsedBy }).eq('code', promoCodeInput);
-        await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
-        setUser(prev => ({ ...prev, balance: newBalance }));
-        alert(`Success! Received ${promo.value} TON ✅`);
-        setPromoCodeInput('');
-        fetchAllData();
-    });
-  };
-
   // --- STRICT TASK LOGIC ---
   const handleStartTask = (task) => {
-    if (user.id !== ADMIN_ID && user.completed_tasks?.includes(task.id)) {
-        return alert("This task is already finished!");
+    if (user.completed_tasks?.includes(task.id)) {
+        return alert("ဒီ Task ကို ပြီးမြောက်သွားပါပြီ။ တစ်ခါပဲ လုပ်ခွင့်ရှိပါသည်။");
     }
     
-    // Open task link
+    // Task Link ကို အရင်ဖွင့်မယ်
     window.open(task.link, '_blank');
     
-    // Trigger Ad for 20s. Balance only adds after timer hits 0.
+    // ပြီးတာနဲ့ Ad Engine ကို ၂၀ စက္ကန့် စမယ်
     triggerAd(20, async () => { 
         const updatedTasks = [...(user.completed_tasks || []), task.id];
         const newBalance = user.balance + 0.001;
@@ -230,7 +204,7 @@ function App() {
         
         if(!error) {
           setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
-          alert("Task Verified! +0.001 TON Added ✅"); 
+          alert("Task Done! +0.001 TON Added ✅"); 
           fetchAllData();
         }
     });
@@ -274,16 +248,10 @@ function App() {
     }
   };
 
-  const handleCreatePromo = async () => {
-    if (!adminPromoCode || !adminPromoValue) return alert("Missing info!");
-    const { error } = await supabase.from('promo_codes').insert([
-        { code: adminPromoCode, value: Number(adminPromoValue), used_by: [] }
-    ]);
-    if (!error) {
-        alert("Promo Created! ✅");
-        setAdminPromoCode(''); setAdminPromoValue('');
-        fetchAllData();
-    } else { alert("Error: Code might already exist."); }
+  const approveWithdraw = async (wId) => {
+    await supabase.from('withdrawals').update({ status: 'Success' }).eq('id', wId);
+    alert("Withdrawal Successful! ✅");
+    handleCheckUser();
   };
 
   const styles = {
@@ -293,13 +261,11 @@ function App() {
     input: { width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '10px', border: '1px solid #000', boxSizing: 'border-box' },
     bottomNav: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#000', display: 'flex', justifyContent: 'space-around', padding: '10px', zIndex: 100 },
     navItem: (active) => ({ color: active ? '#facc15' : '#fff', textAlign: 'center', fontSize: '11px', fontWeight: 'bold', flex: 1, cursor: 'pointer' }),
-    dot: (c) => ({ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: c, marginRight: 8, border: '1px solid #000' }),
     copyBtn: { background: '#eee', border: '1px solid #000', fontSize: '10px', padding: '2px 6px', marginLeft: '5px', borderRadius: '5px', cursor: 'pointer' },
     wheelWrapper: { position: 'relative', width: 220, height: 220, margin: '20px auto' },
     wheelArrow: { position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
     wheel: { width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${spinOptions.map((o, i) => `${o.color} ${i * (360/spinOptions.length)}deg ${(i+1) * (360/spinOptions.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${spinRotation}deg)` },
-    rewardStatusBox: { textAlign: 'center', marginBottom: 10, fontWeight: 'bold', fontSize: 13, display: 'flex', justifyContent: 'center', gap: '15px' },
-    overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 2000, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#fff', textAlign: 'center', padding: 20 },
+    adOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.9)', zIndex: 9999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#fff', padding: 20, textAlign: 'center' },
   };
 
   if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>INITIALIZING...</div>;
@@ -307,13 +273,13 @@ function App() {
   return (
     <div style={styles.container} onClick={handleGlobalClick}>
       
-      {/* STRICT AD OVERLAY */}
+      {/* AD TIMER OVERLAY */}
       {isAdWatching && (
-        <div style={styles.overlay}>
+        <div style={styles.adOverlay}>
            <h2 style={{color: '#facc15'}}>ADVERTISING...</h2>
-           <div style={{fontSize: 60, fontWeight: 'bold', margin: '20px 0'}}>{adTimer}s</div>
-           <p>Wait until the timer ends to claim your reward!<br/>Back button is disabled.</p>
-           <button onClick={() => window.open(currentAdUrl.current, '_blank')} style={{...styles.btn, background: '#fff', color: '#000', marginTop: 20}}>REFRESH AD</button>
+           <div style={{fontSize: 50, fontWeight: 'bold', margin: '20px 0'}}>{adTimer}s</div>
+           <p>ကျေးဇူးပြု၍ အချိန်မပြည့်မချင်း ကြော်ငြာကြည့်ပေးပါ။<br/>အချိန်ပြည့်မှ Reward ရရှိပါမည်။</p>
+           <button onClick={() => window.open(currentAdUrl.current, '_blank')} style={{...styles.btn, background: '#fff', color: '#000', marginTop: 20}}>Open Ad Again</button>
         </div>
       )}
 
@@ -323,20 +289,15 @@ function App() {
          {user.is_vip && <span style={{color:'#facc15', fontSize:12, fontWeight:'bold'}}>⭐ VIP MEMBER</span>}
       </div>
 
-      <div style={styles.rewardStatusBox}>
-        <span style={{ color: !user.is_vip ? '#28a745' : '#888' }}>Normal: 0.0003</span>
-        <span style={{ color: user.is_vip ? '#28a745' : '#888' }}>VIP: 0.0008</span>
-      </div>
-
       <button onClick={handleWatchAds} style={{...styles.btn, width:'100%', background:'linear-gradient(to right, #ff416c, #ff4b2b)', marginBottom:15, height:50, fontSize:16, border:'2px solid #000'}}>
         📺 WATCH ADS & EARN (30s)
       </button>
 
       {mainTab === 'earn' && (
         <div style={{display:'flex', gap:5, marginBottom:15}}>
-          {['bot', 'social', 'reward', 'admin'].map(tab => (
+          {['bot', 'social', 'spin', 'admin'].map(tab => (
             (tab !== 'admin' || user.id === ADMIN_ID) && 
-            <button key={tab} onClick={() => { if(tab === 'admin') setSubTab(tab); else triggerAd(20, () => setSubTab(tab)); }} style={{flex:1, padding:10, fontSize:10, borderRadius:10, background:subTab===tab?'#000':'#fff', color:subTab===tab?'#fff':'#000', border:'2px solid #000', fontWeight:'bold'}}>
+            <button key={tab} onClick={() => { if(tab === 'admin') setSubTab(tab); else triggerAd(10, () => setSubTab(tab)); }} style={{flex:1, padding:10, fontSize:10, borderRadius:10, background:subTab===tab?'#000':'#fff', color:subTab===tab?'#fff':'#000', border:'2px solid #000', fontWeight:'bold'}}>
               {tab.toUpperCase()}
             </button>
           ))}
@@ -345,8 +306,7 @@ function App() {
 
       <div style={{minHeight:'45vh'}}>
         {mainTab === 'earn' && (
-          subTab === 'reward' ? (
-            <div>
+          subTab === 'spin' ? (
               <div style={{...styles.card, textAlign:'center'}}>
                 <h3 style={{marginTop:0}}>🎡 LUCKY SPIN</h3>
                 <div style={styles.wheelWrapper}><div style={styles.wheelArrow}></div><div style={styles.wheel}></div></div>
@@ -354,13 +314,6 @@ function App() {
                   {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'SPIN NOW (20s AD)'}
                 </button>
               </div>
-              
-              <div style={styles.card}>
-                <h4 style={{marginTop:0}}>🎁 REDEEM REWARD CODE</h4>
-                <input style={styles.input} placeholder="Enter Code Here" value={promoCodeInput} onChange={e=>setPromoCodeInput(e.target.value)} />
-                <button onClick={handleRedeemPromo} style={{...styles.btn, width:'100%', background:'#ff9900'}}>CLAIM REWARD (20s AD)</button>
-              </div>
-            </div>
           ) : subTab === 'admin' ? (
             <div style={styles.card}>
               <h3 style={{marginTop:0}}>Admin Panel</h3>
@@ -368,15 +321,28 @@ function App() {
               <button style={{...styles.btn, width:'100%', marginBottom:10}} onClick={handleCheckUser}>CHECK USER</button>
               {searchedUser && (
                 <div style={{background:'#f0f9ff', padding:15, borderRadius:10, border:'1px solid #000', marginBottom:10}}>
-                  <p>UID: {searchedUser.id}</p>
+                  <p>UID: {searchedUser.id} | VIP: {searchedUser.is_vip ? 'Yes' : 'No'}</p>
                   <input style={styles.input} type="number" value={editBal} onChange={e=>setEditBal(e.target.value)} />
                   <select style={styles.input} value={editVip} onChange={e=>setEditVip(e.target.value === 'true')}>
                     <option value="false">Standard</option><option value="true">VIP ⭐</option>
                   </select>
-                  <button style={{...styles.btn, width:'100%', background:'green'}} onClick={handleUpdateUser}>UPDATE DATA</button>
+                  <button style={{...styles.btn, width:'100%', background:'green', marginBottom:15}} onClick={handleUpdateUser}>UPDATE DATA</button>
+                  {userWithdraws.map(w => (
+                    <div key={w.id} style={{fontSize:11, marginBottom:10}}>
+                        {w.amount} TON to {w.address.slice(0,10)}...
+                        <button onClick={() => approveWithdraw(w.id)} style={{float:'right', background:'blue', color:'#fff'}}>Success</button>
+                    </div>
+                  ))}
                 </div>
               )}
               <hr/>
+              <h4>Active Tasks</h4>
+              {tasks.map(t => (
+                <div key={t.id} style={{display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #eee'}}>
+                   <span style={{fontSize:12}}>{t.name} ({t.type})</span>
+                   <button onClick={async () => { if(window.confirm("Delete?")){ await supabase.from('global_tasks').delete().eq('id', t.id); fetchAllData(); } }} style={{background:'red', color:'#fff', border:'none', borderRadius:5, fontSize:10}}>DELETE</button>
+                </div>
+              ))}
               <input style={styles.input} placeholder="Task Name" value={taskName} onChange={e=>setTaskName(e.target.value)} />
               <input style={styles.input} placeholder="Link" value={taskLink} onChange={e=>setTaskLink(e.target.value)} />
               <select style={styles.input} value={taskType} onChange={e=>setTaskType(e.target.value)}>
@@ -386,17 +352,6 @@ function App() {
                 await supabase.from('global_tasks').insert([{name:taskName, link:taskLink, type:taskType}]);
                 alert("Task Added!"); fetchAllData();
               }}>ADD TASK</button>
-              <hr/>
-              <h4>Reward Codes</h4>
-              {promoCodes.map(p => (
-                <div key={p.id} style={{display:'flex', justifyContent:'space-between', fontSize:11, padding:'5px 0', borderBottom:'1px solid #eee'}}>
-                   <span>{p.code} ({p.value} TON)</span>
-                   <button onClick={async () => { await supabase.from('promo_codes').delete().eq('id', p.id); fetchAllData(); }} style={{color:'red'}}>Delete</button>
-                </div>
-              ))}
-              <input style={styles.input} placeholder="Code Name" value={adminPromoCode} onChange={e=>setAdminPromoCode(e.target.value)} />
-              <input style={styles.input} placeholder="TON Value" type="number" value={adminPromoValue} onChange={e=>setAdminPromoValue(e.target.value)} />
-              <button style={{...styles.btn, width:'100%', background:'#ff9900'}} onClick={handleCreatePromo}>CREATE PROMO</button>
             </div>
           ) : (
             tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(t.id)).map(t => (
@@ -480,11 +435,11 @@ function App() {
       </div>
 
       <div style={styles.bottomNav}>
-        <div onClick={()=>triggerAd(20, () => setMainTab('earn'))} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
-        <div onClick={()=>triggerAd(20, () => setMainTab('invite'))} style={styles.navItem(mainTab==='invite')}>👥<br/>INVITE</div>
-        <div onClick={()=>triggerAd(20, () => setMainTab('rank'))} style={styles.navItem(mainTab==='rank')}>🏆<br/>RANK</div>
-        <div onClick={()=>triggerAd(20, () => setMainTab('withdraw'))} style={styles.navItem(mainTab==='withdraw')}>💳<br/>CASH</div>
-        <div onClick={()=>triggerAd(20, () => setMainTab('profile'))} style={styles.navItem(mainTab==='profile')}>👤<br/>PROFILE</div>
+        <div onClick={()=>triggerAd(10, () => setMainTab('earn'))} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
+        <div onClick={()=>triggerAd(10, () => setMainTab('invite'))} style={styles.navItem(mainTab==='invite')}>👥<br/>INVITE</div>
+        <div onClick={()=>triggerAd(10, () => setMainTab('rank'))} style={styles.navItem(mainTab==='rank')}>🏆<br/>RANK</div>
+        <div onClick={()=>triggerAd(10, () => setMainTab('withdraw'))} style={styles.navItem(mainTab==='withdraw')}>💳<br/>CASH</div>
+        <div onClick={()=>triggerAd(10, () => setMainTab('profile'))} style={styles.navItem(mainTab==='profile')}>👤<br/>PROFILE</div>
       </div>
     </div>
   );
