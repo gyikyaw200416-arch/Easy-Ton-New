@@ -115,7 +115,7 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- AD ENGINE ---
+  // --- ALTERNATING AD LOGIC ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     
@@ -151,8 +151,6 @@ function App() {
     }
     return () => clearInterval(timer);
   }, [isAdWatching, adTimer, pendingAction]);
-
-  // --- LOGIC FOR REWARDS ---
 
   const handleWatchAds = () => {
     triggerAd(30, async () => {
@@ -191,32 +189,30 @@ function App() {
     });
   };
 
-  // --- FIXED TASK HANDLER WITH ADS & PERSISTENT DONE STATE ---
+  // --- UPDATED START TASK HANDLER (LINK + AD MANDATORY) ---
   const handleStartTask = (task) => {
-    // Prevent clicking if already done
     if (user.completed_tasks?.includes(task.id)) return;
-
-    // 1. Open the Task Link (Bot or Social)
+    
+    // 1. Open the Task target link
     window.open(task.link, '_blank');
-
-    // 2. Start the 20s Ad
-    triggerAd(20, async () => {
-      const updatedTasks = [...(user.completed_tasks || []), task.id];
-      const newBalance = user.balance + 0.001; // Fixed reward for tasks
-
-      // Update Database
-      const { error } = await supabase
-        .from('users')
-        .update({ balance: newBalance, completed_tasks: updatedTasks })
-        .eq('id', user.id);
-
-      if (!error) {
-        setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
-        alert("Task Completed! +0.001 TON added ✅");
-        fetchAllData();
-      } else {
-        alert("Error saving task progress.");
-      }
+    
+    // 2. Immediately trigger 20s Ad requirement
+    triggerAd(20, async () => { 
+        // Logic executes only after 20s ad timer hits zero
+        const updatedTasks = [...(user.completed_tasks || []), task.id];
+        const taskReward = 0.001; 
+        const newBalance = user.balance + taskReward;
+        
+        const { error } = await supabase.from('users').update({ 
+          balance: newBalance, 
+          completed_tasks: updatedTasks 
+        }).eq('id', user.id);
+        
+        if(!error) {
+          setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
+          alert(`Task Verified! +${taskReward} TON Added ✅`); 
+          fetchAllData();
+        }
     });
   };
 
