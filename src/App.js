@@ -113,7 +113,7 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- AD ENGINE (STRICT LOCK) ---
+  // --- AD ENGINE (STRICT) ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     
@@ -127,7 +127,7 @@ function App() {
 
   const handleGlobalClick = () => {
     if (isAdWatching && adTimer > 0) {
-      alert(`ကြော်ငြာကြည့်ရန် ${adTimer}s စက္ကန့် ကျန်ပါသေးသည်။`);
+      alert(`Ad In Progress: ${adTimer}s remaining!`);
       window.open(currentAdUrl.current, '_blank');
     }
   };
@@ -183,16 +183,15 @@ function App() {
     });
   };
 
-  // --- STRICT TASK LOGIC ---
+  // --- TASK LOGIC (ONE-TIME ONLY) ---
   const handleStartTask = (task) => {
     if (user.completed_tasks?.includes(task.id)) {
-        return alert("ဒီ Task ကို ပြီးမြောက်သွားပါပြီ။ တစ်ခါပဲ လုပ်ခွင့်ရှိပါသည်။");
+        return alert("Task already completed!");
     }
     
-    // Task Link ကို အရင်ဖွင့်မယ်
+    // Open Link & Ad simultaneously
     window.open(task.link, '_blank');
     
-    // ပြီးတာနဲ့ Ad Engine ကို ၂၀ စက္ကန့် စမယ်
     triggerAd(20, async () => { 
         const updatedTasks = [...(user.completed_tasks || []), task.id];
         const newBalance = user.balance + 0.001;
@@ -204,7 +203,7 @@ function App() {
         
         if(!error) {
           setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
-          alert("Task Done! +0.001 TON Added ✅"); 
+          alert("DONE! +0.001 TON Added ✅"); 
           fetchAllData();
         }
     });
@@ -265,7 +264,8 @@ function App() {
     wheelWrapper: { position: 'relative', width: 220, height: 220, margin: '20px auto' },
     wheelArrow: { position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
     wheel: { width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${spinOptions.map((o, i) => `${o.color} ${i * (360/spinOptions.length)}deg ${(i+1) * (360/spinOptions.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${spinRotation}deg)` },
-    adOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.9)', zIndex: 9999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#fff', padding: 20, textAlign: 'center' },
+    rewardStatusBox: { textAlign: 'center', marginBottom: 10, fontWeight: 'bold', fontSize: 13, display: 'flex', justifyContent: 'center', gap: '15px' },
+    adOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', zIndex: 999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#fff', padding: '20px', textAlign: 'center' }
   };
 
   if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>INITIALIZING...</div>;
@@ -276,10 +276,10 @@ function App() {
       {/* AD TIMER OVERLAY */}
       {isAdWatching && (
         <div style={styles.adOverlay}>
-           <h2 style={{color: '#facc15'}}>ADVERTISING...</h2>
-           <div style={{fontSize: 50, fontWeight: 'bold', margin: '20px 0'}}>{adTimer}s</div>
-           <p>ကျေးဇူးပြု၍ အချိန်မပြည့်မချင်း ကြော်ငြာကြည့်ပေးပါ။<br/>အချိန်ပြည့်မှ Reward ရရှိပါမည်။</p>
-           <button onClick={() => window.open(currentAdUrl.current, '_blank')} style={{...styles.btn, background: '#fff', color: '#000', marginTop: 20}}>Open Ad Again</button>
+           <h2 style={{color: '#facc15'}}>WATCHING AD</h2>
+           <div style={{fontSize: 60, margin: '10px 0'}}>{adTimer}s</div>
+           <p>Please wait until timer finishes to receive your reward!</p>
+           <button onClick={() => window.open(currentAdUrl.current, '_blank')} style={{...styles.btn, background: '#fff', color: '#000', marginTop: 10}}>Re-open Ad</button>
         </div>
       )}
 
@@ -287,6 +287,11 @@ function App() {
          <small style={{opacity:0.7}}>MY TOTAL BALANCE</small>
          <h1 style={{margin:'5px 0', fontSize:32}}>{user.balance.toFixed(5)} TON</h1>
          {user.is_vip && <span style={{color:'#facc15', fontSize:12, fontWeight:'bold'}}>⭐ VIP MEMBER</span>}
+      </div>
+
+      <div style={styles.rewardStatusBox}>
+        <span style={{ color: !user.is_vip ? '#28a745' : '#888' }}>Normal: 0.0003</span>
+        <span style={{ color: user.is_vip ? '#28a745' : '#888' }}>VIP: 0.0008</span>
       </div>
 
       <button onClick={handleWatchAds} style={{...styles.btn, width:'100%', background:'linear-gradient(to right, #ff416c, #ff4b2b)', marginBottom:15, height:50, fontSize:16, border:'2px solid #000'}}>
@@ -307,13 +312,16 @@ function App() {
       <div style={{minHeight:'45vh'}}>
         {mainTab === 'earn' && (
           subTab === 'spin' ? (
-              <div style={{...styles.card, textAlign:'center'}}>
-                <h3 style={{marginTop:0}}>🎡 LUCKY SPIN</h3>
-                <div style={styles.wheelWrapper}><div style={styles.wheelArrow}></div><div style={styles.wheel}></div></div>
-                <button onClick={handleSpin} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#00d2ff'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
-                  {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'SPIN NOW (20s AD)'}
-                </button>
+            <div style={{...styles.card, textAlign:'center'}}>
+              <h3 style={{marginTop:0}}>🎡 LUCKY SPIN</h3>
+              <div style={styles.wheelWrapper}><div style={styles.wheelArrow}></div><div style={styles.wheel}></div></div>
+              <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:5, marginBottom:10, fontSize:9}}>
+                 {spinOptions.map((o,i) => <div key={i}><span style={styles.dot(o.color)}></span>{o.amt}</div>)}
               </div>
+              <button onClick={handleSpin} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#00d2ff'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
+                {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'SPIN NOW (20s AD)'}
+              </button>
+            </div>
           ) : subTab === 'admin' ? (
             <div style={styles.card}>
               <h3 style={{marginTop:0}}>Admin Panel</h3>
@@ -336,7 +344,7 @@ function App() {
                 </div>
               )}
               <hr/>
-              <h4>Active Tasks</h4>
+              <h4>Tasks List</h4>
               {tasks.map(t => (
                 <div key={t.id} style={{display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #eee'}}>
                    <span style={{fontSize:12}}>{t.name} ({t.type})</span>
@@ -354,10 +362,14 @@ function App() {
               }}>ADD TASK</button>
             </div>
           ) : (
-            tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(t.id)).map(t => (
+            tasks.filter(t => t.type === subTab).map(t => (
               <div key={t.id} style={styles.card}>
                 <span style={{fontWeight:'bold'}}>{t.name}</span>
-                <button onClick={()=>handleStartTask(t)} style={{...styles.btn, float:'right', padding:'8px 15px'}}>START</button>
+                {user.completed_tasks?.includes(t.id) ? (
+                   <button style={{...styles.btn, float:'right', padding:'8px 15px', background:'#34C759'}} disabled>DONE ✅</button>
+                ) : (
+                   <button onClick={()=>handleStartTask(t)} style={{...styles.btn, float:'right', padding:'8px 15px'}}>START</button>
+                )}
               </div>
             ))
           )
