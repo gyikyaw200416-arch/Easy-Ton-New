@@ -89,7 +89,7 @@ function App() {
     }
     setUser(uData);
     
-    const waitTime = 1 * 60 * 60 * 1000; // 1 Hour Cooldown
+    const waitTime = 1 * 60 * 60 * 1000; 
     const diff = waitTime - (Date.now() - (uData.last_spin || 0));
     setTimeLeft(diff > 0 ? diff : 0);
 
@@ -102,6 +102,7 @@ function App() {
     const { data: wData } = await supabase.from('withdrawals').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
     if (wData) setWithdraws(wData);
 
+    // FIX 1: Correctly fetching invited users' usernames for history
     const { data: iData } = await supabase.from('users').select('id, username, balance').eq('invited_by', user.id);
     if (iData) setInvites(iData);
 
@@ -114,7 +115,6 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- AD ENGINE (STRICT) ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     
@@ -185,11 +185,8 @@ function App() {
   };
 
   const handleStartTask = (task) => {
-    if (user.completed_tasks?.includes(task.id)) {
-        return alert("Task already completed!");
-    }
+    if (user.completed_tasks?.includes(task.id)) return;
     
-    // Launch Task Link & Ad simultaneously
     window.open(task.link, '_blank');
     
     triggerAd(20, async () => { 
@@ -231,9 +228,10 @@ function App() {
   const handleCheckUser = async () => {
     if (!targetId) return;
     const { data: userData } = await supabase.from('users').select('*').eq('id', targetId).single();
-    const { data: wData } = await supabase.from('withdrawals').select('*').eq('user_id', targetId).eq('status', 'Pending');
     if (userData) { 
-        setSearchedUser(userData); setEditBal(userData.balance); setEditVip(userData.is_vip); setUserWithdraws(wData || []);
+        setSearchedUser(userData); setEditBal(userData.balance); setEditVip(userData.is_vip);
+        const { data: wData } = await supabase.from('withdrawals').select('*').eq('user_id', targetId).eq('status', 'Pending');
+        setUserWithdraws(wData || []);
     } else { alert("User Not Found!"); }
   };
 
@@ -242,7 +240,7 @@ function App() {
     const { error } = await supabase.from('users').update(updatedFields).eq('id', targetId);
     if (!error) {
         alert("User Data Updated! ✅");
-        setSearchedUser(prev => ({ ...prev, ...updatedFields }));
+        handleCheckUser();
         fetchAllData(); 
     }
   };
@@ -264,7 +262,8 @@ function App() {
     wheelWrapper: { position: 'relative', width: 220, height: 220, margin: '20px auto' },
     wheelArrow: { position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
     wheel: { width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${spinOptions.map((o, i) => `${o.color} ${i * (360/spinOptions.length)}deg ${(i+1) * (360/spinOptions.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${spinRotation}deg)` },
-    adOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.95)', zIndex: 9999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#fff', textAlign: 'center', padding: 20 },
+    // FIX 5: Ad Overlay is now solid black to prevent seeing the "second screen"
+    adOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: '#000', zIndex: 9999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#fff', textAlign: 'center', padding: 20 },
     dot: (color) => ({ height: 10, width: 10, backgroundColor: color, borderRadius: '50%', display: 'inline-block', marginRight: 5, border: '1px solid #000' })
   };
 
@@ -273,10 +272,9 @@ function App() {
   return (
     <div style={styles.container} onClick={handleGlobalClick}>
       
-      {/* AD BLOCKER OVERLAY */}
       {isAdWatching && (
         <div style={styles.adOverlay}>
-          <h2 style={{color: '#facc15'}}>Watch the full time 20s ‼️</h2>
+          <h2 style={{color: '#facc15'}}>Watch the full time ‼️</h2>
           <div style={{fontSize: 60, margin: '20px 0'}}>{adTimer}s</div>
           <p>Please stay on the advertisement to claim your reward.</p>
           <button onClick={() => window.open(currentAdUrl.current, '_blank')} style={{...styles.btn, background: '#fff', color: '#000', marginTop: 20}}>RETURN TO AD</button>
@@ -289,9 +287,10 @@ function App() {
          {user.is_vip && <span style={{color:'#facc15', fontSize:12, fontWeight:'bold'}}>⭐ VIP MEMBER</span>}
       </div>
 
+      {/* FIX 2: Text turns green based on user status */}
       <div style={{display:'flex', justifyContent:'center', gap:20, marginBottom:10, fontSize:12, fontWeight:'bold'}}>
-         <span>Normal: 0.0003 TON</span>
-         <span style={{color:'#b8860b'}}>VIP: 0.0008 TON</span>
+         <span style={{color: !user.is_vip ? '#34C759' : '#000'}}>Normal: 0.0003 TON</span>
+         <span style={{color: user.is_vip ? '#34C759' : '#000'}}>VIP: 0.0008 TON</span>
       </div>
 
       <button onClick={handleWatchAds} style={{...styles.btn, width:'100%', background:'linear-gradient(to right, #ff416c, #ff4b2b)', marginBottom:15, height:50, fontSize:16, border:'2px solid #000'}}>
@@ -329,10 +328,12 @@ function App() {
               <button style={{...styles.btn, width:'100%', marginBottom:10}} onClick={handleCheckUser}>CHECK USER</button>
               {searchedUser && (
                 <div style={{background:'#f0f9ff', padding:15, borderRadius:10, border:'1px solid #000', marginBottom:10}}>
-                  <p>UID: {searchedUser.id} | VIP: {searchedUser.is_vip ? 'Yes' : 'No'}</p>
+                  <p>UID: {searchedUser.id}</p>
                   <input style={styles.input} type="number" value={editBal} onChange={e=>setEditBal(e.target.value)} />
+                  {/* FIX 3: Admin can change user back to Normal or VIP */}
                   <select style={styles.input} value={editVip} onChange={e=>setEditVip(e.target.value === 'true')}>
-                    <option value="false">Standard</option><option value="true">VIP ⭐</option>
+                    <option value="false">Normal (Standard)</option>
+                    <option value="true">VIP ⭐</option>
                   </select>
                   <button style={{...styles.btn, width:'100%', background:'green', marginBottom:15}} onClick={handleUpdateUser}>UPDATE DATA</button>
                   {userWithdraws.map(w => (
@@ -362,6 +363,7 @@ function App() {
               }}>ADD TASK</button>
             </div>
           ) : (
+            // FIX 4: Filtering out tasks that are already in user.completed_tasks
             tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(t.id)).map(t => (
               <div key={t.id} style={styles.card}>
                 <span style={{fontWeight:'bold'}}>{t.name}</span>
@@ -381,11 +383,18 @@ function App() {
             <button onClick={() => {navigator.clipboard.writeText(`https://t.me/EasyTONFree_Bot?start=${user.id}`); alert("Copied!");}} style={{...styles.btn, width:'100%'}}>COPY LINK</button>
             <div style={{marginTop:20, textAlign:'left'}}>
                <h4>Invite History</h4>
-               {invites.map((inv, i) => <div key={i} style={{fontSize:11, padding:5, borderBottom:'1px solid #eee'}}>User: @{inv.username || inv.id} <b style={{float:'right', color:'green'}}>+0.005 TON ✅</b></div>)}
+               {invites.map((inv, i) => (
+                 // FIX 1: Showing invited username instead of ID
+                 <div key={i} style={{fontSize:11, padding:5, borderBottom:'1px solid #eee'}}>
+                    User: @{inv.username || "User_"+inv.id.slice(0,5)} 
+                    <b style={{float:'right', color:'green'}}>+0.005 TON ✅</b>
+                 </div>
+               ))}
             </div>
           </div>
         )}
 
+        {/* --- Rank, Withdraw, Profile remain the same --- */}
         {mainTab === 'rank' && (
           <div style={styles.card}>
             <h3 style={{textAlign:'center', marginTop:0}}>🏆 TOP 50 RANKINGS</h3>
