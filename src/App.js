@@ -26,6 +26,7 @@ function App() {
   });
   
   const [tasks, setTasks] = useState([]);
+  const [promoList, setPromoList] = useState([]);
   const [withdraws, setWithdraws] = useState([]);
   const [invites, setInvites] = useState([]);
   const [rankList, setRankList] = useState([]);
@@ -98,6 +99,9 @@ function App() {
     const { data: tData } = await supabase.from('global_tasks').select('*');
     if (tData) setTasks(tData);
 
+    const { data: pData } = await supabase.from('promo_codes').select('*');
+    if (pData) setPromoList(pData);
+
     const { data: rData } = await supabase.from('users').select('id, balance').order('balance', { ascending: false }).limit(50);
     if (rData) setRankList(rData);
 
@@ -120,7 +124,7 @@ function App() {
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     
-    alert(`Watch the ad for ${duration}s to claim reward! ⏳`);
+    alert(`AD START: View for ${duration} seconds to continue! ⏳`);
     
     const randomAd = AD_LINKS[Math.floor(Math.random() * AD_LINKS.length)];
     currentAdUrl.current = randomAd;
@@ -132,7 +136,7 @@ function App() {
 
   const handleGlobalClick = () => {
     if (isAdWatching && adTimer > 0) {
-      alert(`Ad timer active: ${adTimer}s remaining! ⏳`);
+      alert(`Ad In Progress! Please wait ${adTimer}s more! ⏳`);
       window.open(currentAdUrl.current, '_blank');
     }
   };
@@ -151,20 +155,20 @@ function App() {
     return () => clearInterval(timer);
   }, [isAdWatching, adTimer, pendingAction]);
 
-  // --- EARNING ACTIONS ---
+  // --- ACTIONS ---
   const handleWatchAds = () => {
     triggerAd(30, async () => {
       const reward = user.is_vip ? 0.0008 : 0.0003; 
       const newBalance = user.balance + reward;
       await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
       setUser(prev => ({ ...prev, balance: newBalance }));
-      alert(`Success! Earned ${reward} TON ✅`);
+      alert(`Earned ${reward} TON from Ads! ✅`);
       fetchAllData();
     });
   };
 
   const handleSpin = async () => {
-    if (user.id !== ADMIN_ID && timeLeft > 0) return alert("Cooldown active!");
+    if (user.id !== ADMIN_ID && timeLeft > 0) return alert("Spin cooldown active!");
     if (isSpinning) return;
 
     triggerAd(20, async () => {
@@ -183,7 +187,7 @@ function App() {
           const { error } = await supabase.from('users').update({ balance: newBalance, last_spin: now }).eq('id', user.id);
           if (!error) {
             setUser(prev => ({ ...prev, balance: newBalance, last_spin: now }));
-            alert(`Landed on ${winner.label}! Added ${winner.amt} TON ✅`);
+            alert(`Landed on ${winner.label}: +${winner.amt} TON ✅`);
           }
           setIsSpinning(false);
           fetchAllData();
@@ -191,11 +195,12 @@ function App() {
     });
   };
 
+  // --- REWARD CODE ---
   const handleRedeemPromo = () => {
     triggerAd(20, async () => {
         const { data: promo } = await supabase.from('promo_codes').select('*').eq('code', promoCodeInput).single();
-        if (!promo) return alert("Invalid Code!");
-        if (promo.used_by?.includes(user.id)) return alert("Already used!");
+        if (!promo) return alert("Invalid Reward Code!");
+        if (promo.used_by?.includes(user.id)) return alert("Already claimed this code!");
 
         const updatedUsedBy = [...(promo.used_by || []), user.id];
         const newBalance = user.balance + promo.value;
@@ -208,19 +213,19 @@ function App() {
     });
   };
 
-  // --- TASK LOGIC (OPEN LINK + TRIGGER AD) ---
+  // --- TASK LOGIC (FIXED: AD + REMOVE ON COMPLETE) ---
   const handleStartTask = (task) => {
     if (user.id !== ADMIN_ID && user.completed_tasks?.includes(task.id)) {
         return alert("Task already done!");
     }
     
-    // 1. Open the Bot or Social Link
+    // Step 1: Open Target Link
     window.open(task.link, '_blank');
     
-    // 2. Trigger the Ad Timer (20 seconds)
+    // Step 2: Trigger Ad Timer before Reward
     triggerAd(20, async () => { 
         const updatedTasks = [...(user.completed_tasks || []), task.id];
-        const newBalance = user.balance + 0.001; // Reward for task
+        const newBalance = user.balance + 0.001;
         
         const { error } = await supabase.from('users').update({ 
           balance: newBalance, 
@@ -229,7 +234,7 @@ function App() {
         
         if(!error) {
           setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
-          alert("Task Completed! +0.001 TON Earned ✅"); 
+          alert("Task Done! +0.001 TON Added ✅"); 
           fetchAllData();
         }
     });
@@ -239,7 +244,7 @@ function App() {
     triggerAd(20, async () => {
         const amt = Number(withdrawAmt);
         if (amt < 0.1) return alert("Min 0.1 TON");
-        if (amt > user.balance) return alert("Insufficient Balance!");
+        if (amt > user.balance) return alert("Low balance!");
         
         const currentDate = new Date().toISOString();
         await supabase.from('withdrawals').insert([{ 
@@ -253,31 +258,40 @@ function App() {
     });
   };
 
-  // --- ADMIN FUNCTIONS ---
+  // --- ADMIN TOOLS ---
   const handleCheckUser = async () => {
     if (!targetId) return;
     const { data: userData } = await supabase.from('users').select('*').eq('id', targetId).single();
-    const { data: withdrawData } = await supabase.from('withdrawals').select('*').eq('user_id', targetId).eq('status', 'Pending');
+    const { data: wData } = await supabase.from('withdrawals').select('*').eq('user_id', targetId).eq('status', 'Pending');
     if (userData) { 
-        setSearchedUser(userData); setEditBal(userData.balance); setEditVip(userData.is_vip); setUserWithdraws(withdrawData || []);
-    } else { alert("User Not Found!"); }
+        setSearchedUser(userData); setEditBal(userData.balance); setEditVip(userData.is_vip); setUserWithdraws(wData || []);
+    } else { alert("Not Found!"); }
   };
 
   const handleUpdateUser = async () => {
-    const updatedFields = { balance: Number(editBal), is_vip: editVip };
-    const { error } = await supabase.from('users').update(updatedFields).eq('id', targetId);
+    const { error } = await supabase.from('users').update({ balance: Number(editBal), is_vip: editVip }).eq('id', targetId);
     if (!error) {
-        alert("Updated! ✅");
-        setSearchedUser(prev => ({ ...prev, ...updatedFields }));
+        alert("User Updated! ✅");
+        handleCheckUser();
         fetchAllData(); 
     }
   };
 
   const handleCreatePromo = async () => {
-    if (!adminPromoCode || !adminPromoValue) return alert("Fields empty!");
+    if (!adminPromoCode || !adminPromoValue) return alert("Enter code & value!");
     const { error } = await supabase.from('promo_codes').insert([{ code: adminPromoCode, value: Number(adminPromoValue), used_by: [] }]);
-    if (!error) { alert("Promo Created! ✅"); setAdminPromoCode(''); setAdminPromoValue(''); }
-    else { alert("Error: Code might exist."); }
+    if (!error) {
+        alert("Reward Code Added! ✅");
+        setAdminPromoCode(''); setAdminPromoValue('');
+        fetchAllData();
+    } else { alert("Code exists or Error."); }
+  };
+
+  const handleDeletePromo = async (code) => {
+    if(window.confirm("Delete this code?")){
+        const { error } = await supabase.from('promo_codes').delete().eq('code', code);
+        if(!error) { alert("Code Deleted!"); fetchAllData(); }
+    }
   };
 
   const approveWithdraw = async (wId) => {
@@ -294,36 +308,27 @@ function App() {
     bottomNav: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#000', display: 'flex', justifyContent: 'space-around', padding: '10px', zIndex: 100 },
     navItem: (active) => ({ color: active ? '#facc15' : '#fff', textAlign: 'center', fontSize: '11px', fontWeight: 'bold', flex: 1, cursor: 'pointer' }),
     dot: (c) => ({ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: c, marginRight: 8, border: '1px solid #000' }),
-    copyBtn: { background: '#eee', border: '1px solid #000', fontSize: '10px', padding: '2px 6px', marginLeft: '5px', borderRadius: '5px', cursor: 'pointer' },
     wheelWrapper: { position: 'relative', width: 220, height: 220, margin: '20px auto' },
-    wheelArrow: { position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
     wheel: { width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${spinOptions.map((o, i) => `${o.color} ${i * (360/spinOptions.length)}deg ${(i+1) * (360/spinOptions.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${spinRotation}deg)` },
-    rewardStatusBox: { textAlign: 'center', marginBottom: 10, fontWeight: 'bold', fontSize: 13, display: 'flex', justifyContent: 'center', gap: '15px' },
-    timerOverlay: { position: 'fixed', top: 20, right: 20, background: 'rgba(255,0,0,0.9)', color: '#fff', padding: '10px 20px', borderRadius: '20px', zIndex: 2000, fontWeight: 'bold', border: '2px solid #000' }
   };
 
-  if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>LOADING...</div>;
+  if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>LOADING DATA...</div>;
 
   return (
     <div style={styles.container} onClick={handleGlobalClick}>
       
-      {isAdWatching && adTimer > 0 && <div style={styles.timerOverlay}>ADS REMAINING: {adTimer}s</div>}
-
+      {/* Balance Header */}
       <div style={{background:'#000', color:'#fff', padding:20, borderRadius:20, textAlign:'center', marginBottom:15, border: '2px solid #fff'}}>
          <small style={{opacity:0.7}}>MY TOTAL BALANCE</small>
          <h1 style={{margin:'5px 0', fontSize:32}}>{user.balance.toFixed(5)} TON</h1>
          {user.is_vip && <span style={{color:'#facc15', fontSize:12, fontWeight:'bold'}}>⭐ VIP MEMBER</span>}
       </div>
 
-      <div style={styles.rewardStatusBox}>
-        <span style={{ color: !user.is_vip ? '#28a745' : '#888' }}>Normal: 0.0003</span>
-        <span style={{ color: user.is_vip ? '#28a745' : '#888' }}>VIP: 0.0008</span>
-      </div>
-
       <button onClick={handleWatchAds} style={{...styles.btn, width:'100%', background:'linear-gradient(to right, #ff416c, #ff4b2b)', marginBottom:15, height:50, fontSize:16, border:'2px solid #000'}}>
         📺 WATCH ADS & EARN (30s)
       </button>
 
+      {/* Tabs */}
       {mainTab === 'earn' && (
         <div style={{display:'flex', gap:5, marginBottom:15}}>
           {['bot', 'social', 'reward', 'admin'].map(tab => (
@@ -340,75 +345,71 @@ function App() {
           subTab === 'reward' ? (
             <div>
               <div style={{...styles.card, textAlign:'center'}}>
-                <h3 style={{marginTop:0}}>🎡 LUCKY SPIN</h3>
-                <div style={styles.wheelWrapper}><div style={styles.wheelArrow}></div><div style={styles.wheel}></div></div>
+                <h3>🎡 LUCKY SPIN</h3>
+                <div style={styles.wheelWrapper}><div style={styles.wheel}></div></div>
                 <button onClick={handleSpin} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#00d2ff'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
-                  {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'SPIN NOW'}
+                  {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'SPIN NOW (20s AD)'}
                 </button>
-                <div style={{textAlign:'left', marginTop:20, fontSize:11, display:'grid', gridTemplateColumns:'1fr 1fr'}}>
-                  {spinOptions.map((o,i) => (<div key={i} style={{marginBottom:4}}><span style={styles.dot(o.color)}></span> {o.amt}</div>))}
-                </div>
               </div>
               <div style={styles.card}>
                 <h4>🎁 REDEEM CODE</h4>
-                <input style={styles.input} placeholder="Enter Reward Code" value={promoCodeInput} onChange={e=>setPromoCodeInput(e.target.value)} />
-                <button onClick={handleRedeemPromo} style={{...styles.btn, width:'100%', background:'#ff9900'}}>CLAIM REWARD</button>
+                <input style={styles.input} placeholder="Reward Code" value={promoCodeInput} onChange={e=>setPromoCodeInput(e.target.value)} />
+                <button onClick={handleRedeemPromo} style={{...styles.btn, width:'100%', background:'#ff9900'}}>CLAIM REWARD (20s AD)</button>
               </div>
             </div>
           ) : subTab === 'admin' ? (
             <div style={styles.card}>
-              <h3>Admin Panel</h3>
-              <input style={styles.input} placeholder="Search User UID" value={targetId} onChange={e=>setTargetId(e.target.value)} />
-              <button style={{...styles.btn, width:'100%', marginBottom:10}} onClick={handleCheckUser}>CHECK USER</button>
+              <h3>Admin Tools</h3>
+              <input style={styles.input} placeholder="User UID" value={targetId} onChange={e=>setTargetId(e.target.value)} />
+              <button style={{...styles.btn, width:'100%', marginBottom:10}} onClick={handleCheckUser}>SEARCH USER</button>
+              
               {searchedUser && (
-                <div style={{background:'#f0f9ff', padding:15, borderRadius:10, border:'1px solid #000', marginBottom:10}}>
-                  <p><b>User:</b> {searchedUser.id}</p>
-                  <p>Bal: {searchedUser.balance} | VIP: {searchedUser.is_vip ? 'Yes' : 'No'}</p>
+                <div style={{background:'#f0f9ff', padding:10, borderRadius:10, border:'1px solid #000', marginBottom:10}}>
+                  <p>UID: {searchedUser.id}</p>
                   <input style={styles.input} type="number" value={editBal} onChange={e=>setEditBal(e.target.value)} />
                   <select style={styles.input} value={editVip} onChange={e=>setEditVip(e.target.value === 'true')}>
-                    <option value="false">Standard</option><option value="true">VIP ⭐</option>
+                    <option value="false">Standard</option><option value="true">VIP</option>
                   </select>
-                  <button style={{...styles.btn, width:'100%', background:'green', marginBottom:15}} onClick={handleUpdateUser}>UPDATE DATA</button>
+                  <button style={{...styles.btn, width:'100%', background:'green'}} onClick={handleUpdateUser}>UPDATE USER</button>
                   {userWithdraws.map(w => (
-                    <div key={w.id} style={{fontSize:11, marginBottom:10, paddingBottom:5, borderBottom:'1px solid #eee'}}>
-                        {w.amount} TON to {w.address.slice(0,10)}...
-                        <button onClick={() => approveWithdraw(w.id)} style={{float:'right', background:'blue', color:'#fff', border:'none', padding:'4px 8px', borderRadius:5}}>Approve</button>
-                    </div>
+                    <button key={w.id} onClick={() => approveWithdraw(w.id)} style={{marginTop:10, background:'blue', color:'#fff', width:'100%', padding:5}}>Approve {w.amount} TON</button>
                   ))}
                 </div>
               )}
+              
               <hr/>
-              <h4>Tasks List</h4>
+              <h4>Manage Tasks</h4>
               {tasks.map(t => (
-                <div key={t.id} style={{display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #eee'}}>
-                   <span style={{fontSize:12}}>{t.name} ({t.type})</span>
-                   <button onClick={async () => { if(window.confirm("Delete?")){ await supabase.from('global_tasks').delete().eq('id', t.id); fetchAllData(); } }} style={{background:'red', color:'#fff', border:'none', borderRadius:5, fontSize:10, padding:'2px 8px'}}>DEL</button>
+                <div key={t.id} style={{fontSize:12, padding:5, borderBottom:'1px solid #eee'}}>
+                   {t.name} ({t.type}) <button onClick={async ()=>{await supabase.from('global_tasks').delete().eq('id',t.id); fetchAllData();}} style={{color:'red', float:'right'}}>DEL</button>
                 </div>
               ))}
-              <hr/>
-              <h4>Add New Task</h4>
               <input style={styles.input} placeholder="Task Name" value={taskName} onChange={e=>setTaskName(e.target.value)} />
-              <input style={styles.input} placeholder="Link (Bot/Social)" value={taskLink} onChange={e=>setTaskLink(e.target.value)} />
+              <input style={styles.input} placeholder="Link" value={taskLink} onChange={e=>setTaskLink(e.target.value)} />
               <select style={styles.input} value={taskType} onChange={e=>setTaskType(e.target.value)}>
-                <option value="bot">Bot Task</option><option value="social">Social Task</option>
+                <option value="bot">Bot</option><option value="social">Social</option>
               </select>
               <button style={{...styles.btn, width:'100%'}} onClick={async ()=>{
                 await supabase.from('global_tasks').insert([{name:taskName, link:taskLink, type:taskType}]);
                 alert("Task Added!"); fetchAllData();
-              }}>SAVE TASK</button>
+              }}>ADD NEW TASK</button>
+
               <hr/>
-              <h4>Create Promo</h4>
-              <input style={styles.input} placeholder="Code Name" value={adminPromoCode} onChange={e=>setAdminPromoCode(e.target.value)} />
-              <input style={styles.input} placeholder="TON Value" type="number" value={adminPromoValue} onChange={e=>setAdminPromoValue(e.target.value)} />
-              <button style={{...styles.btn, width:'100%', background:'#ff9900'}} onClick={handleCreatePromo}>SAVE PROMO</button>
+              <h4>Promo Codes</h4>
+              {promoList.map(p => (
+                <div key={p.id} style={{fontSize:12, padding:5, borderBottom:'1px solid #eee'}}>
+                  {p.code} - {p.value} TON <button onClick={()=>handleDeletePromo(p.code)} style={{color:'red', float:'right'}}>DEL</button>
+                </div>
+              ))}
+              <input style={styles.input} placeholder="Promo Code" value={adminPromoCode} onChange={e=>setAdminPromoCode(e.target.value)} />
+              <input style={styles.input} placeholder="Value" type="number" value={adminPromoValue} onChange={e=>setAdminPromoValue(e.target.value)} />
+              <button style={{...styles.btn, width:'100%', background:'#ff9900'}} onClick={handleCreatePromo}>CREATE PROMO</button>
             </div>
           ) : (
             tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(t.id)).map(t => (
               <div key={t.id} style={styles.card}>
                 <span style={{fontWeight:'bold'}}>{t.name}</span>
-                <button onClick={()=>handleStartTask(t)} style={{...styles.btn, float:'right', padding:'8px 15px', background: subTab === 'bot' ? '#0088cc' : '#000'}}>
-                  {subTab === 'bot' ? 'START BOT' : 'JOIN'}
-                </button>
+                <button onClick={()=>handleStartTask(t)} style={{...styles.btn, float:'right', padding:'8px 15px'}}>START</button>
               </div>
             ))
           )
@@ -416,24 +417,20 @@ function App() {
 
         {mainTab === 'invite' && (
           <div style={{...styles.card, textAlign:'center'}}>
-            <h3>Invite Friends</h3>
-            <p style={{color:'green', fontWeight:'bold'}}>Reward: +0.005 TON per Friend!</p>
+            <h3>Invite & Earn</h3>
+            <p style={{color:'green', fontWeight:'bold'}}>Refer Reward: +0.005 TON per user!</p>
             <div style={{background:'#eee', padding:15, borderRadius:10, wordBreak:'break-all', marginBottom:15}}>
                 <code>https://t.me/EasyTONFree_Bot?start={user.id}</code>
             </div>
-            <button onClick={() => {navigator.clipboard.writeText(`https://t.me/EasyTONFree_Bot?start=${user.id}`); alert("Link Copied!");}} style={{...styles.btn, width:'100%'}}>COPY LINK</button>
-            <div style={{marginTop:20, textAlign:'left'}}>
-               <h4>Invited Members</h4>
-               {invites.map((inv, i) => <div key={i} style={{fontSize:11, padding:5, borderBottom:'1px solid #eee'}}>ID: {inv.id} <b style={{float:'right', color:'green'}}>+0.005 TON ✅</b></div>)}
-            </div>
+            <button onClick={() => {navigator.clipboard.writeText(`https://t.me/EasyTONFree_Bot?start=${user.id}`); alert("Link Copied!");}} style={{...styles.btn, width:'100%'}}>COPY REFERRAL LINK</button>
           </div>
         )}
 
         {mainTab === 'rank' && (
           <div style={styles.card}>
-            <h3 style={{textAlign:'center'}}>🏆 TOP 50 RANKINGS</h3>
+            <h3 style={{textAlign:'center', marginTop:0}}>🏆 TOP 50 LEADERS</h3>
             <table style={{width:'100%', fontSize:12, borderCollapse:'collapse'}}>
-              <thead><tr style={{borderBottom:'2px solid #000'}}><th align="left">User ID</th><th align="right">TON Balance</th></tr></thead>
+              <thead><tr style={{borderBottom:'2px solid #000'}}><th align="left">User UID</th><th align="right">Balance</th></tr></thead>
               <tbody>
                 {rankList.map((r, i) => (
                   <tr key={i} style={{borderBottom:'1px solid #eee', background: r.id === user.id ? '#fff9c4' : 'none'}}>
@@ -448,24 +445,15 @@ function App() {
 
         {mainTab === 'withdraw' && (
           <div>
-            <div style={{...styles.card, border: '2px solid gold', background: '#fffcf0'}}>
-                <h4 style={{margin:0, color: '#b8860b'}}>💎 UPGRADE VIP (1 TON)</h4>
-                <p style={{fontSize:11}}>UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9 
-                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText('UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9'); alert("Copied!");}}>COPY</span>
-                </p>
-                <p style={{fontSize:11}}>Memo: {user.id} 
-                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(user.id); alert("Copied!");}}>COPY</span>
-                </p>
-            </div>
             <div style={styles.card}>
-              <h4>Withdrawal</h4>
-              <input style={styles.input} placeholder="TON Wallet Address" value={withdrawAddr} onChange={e=>setWithdrawAddr(e.target.value)} />
+              <h4>Cashout TON</h4>
+              <input style={styles.input} placeholder="TON Address" value={withdrawAddr} onChange={e=>setWithdrawAddr(e.target.value)} />
               <input style={styles.input} placeholder="Amount (Min 0.1)" type="number" value={withdrawAmt} onChange={e=>setWithdrawAmt(e.target.value)} />
-              <button onClick={handleWithdraw} style={{...styles.btn, width:'100%', background:'#0052ff'}}>SEND REQUEST</button>
+              <button onClick={handleWithdraw} style={{...styles.btn, width:'100%', background:'#0052ff'}}>WITHDRAW (20s AD)</button>
             </div>
             {withdraws.map((w,i) => (
-              <div key={i} style={{...styles.card, fontSize:13}}>
-                <div style={{display:'flex', justifyContent:'space-between'}}><span>{w.amount} TON</span><span style={{color: w.status === 'Success' ? 'green' : 'orange', fontWeight:'bold'}}>{w.status}</span></div>
+              <div key={i} style={styles.card}>
+                <div style={{display:'flex', justifyContent:'space-between'}}><span>{w.amount} TON</span><span style={{color: w.status === 'Success' ? 'green' : 'orange'}}>{w.status}</span></div>
                 <small style={{color:'#888'}}>{new Date(w.created_at).toLocaleString()}</small>
               </div>
             ))}
@@ -474,17 +462,18 @@ function App() {
 
         {mainTab === 'profile' && (
           <div style={{...styles.card, textAlign:'center'}}>
-            <h3>User Profile</h3>
-            <div style={{textAlign:'left', marginBottom:20, background: '#f9f9f9', padding: 15, borderRadius: 10}}>
-                <p><b>User ID:</b> {user.id}</p>
+            <h3>My Profile</h3>
+            <div style={{textAlign:'left', background: '#f9f9f9', padding: 15, borderRadius: 10, marginBottom: 15}}>
+                <p><b>ID:</b> {user.id}</p>
                 <p><b>Balance:</b> {user.balance.toFixed(5)} TON</p>
-                <p><b>Status:</b> {user.is_vip ? <span style={{color: '#28a745', fontWeight: 'bold'}}>VIP ⭐</span> : "Standard User"}</p>
+                <p><b>Account:</b> {user.is_vip ? "VIP Member ⭐" : "Free User"}</p>
             </div>
-            <button onClick={()=>window.open("https://t.me/EasyTonHelp_Bot")} style={{...styles.btn, width:'100%', background:'#0088cc'}}>GET HELP</button>
+            <button onClick={()=>window.open("https://t.me/EasyTonHelp_Bot")} style={{...styles.btn, width:'100%', background:'#0088cc'}}>HELP CENTER</button>
           </div>
         )}
       </div>
 
+      {/* Footer Nav */}
       <div style={styles.bottomNav}>
         <div onClick={()=>triggerAd(20, () => setMainTab('earn'))} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
         <div onClick={()=>triggerAd(20, () => setMainTab('invite'))} style={styles.navItem(mainTab==='invite')}>👥<br/>INVITE</div>
