@@ -41,7 +41,6 @@ function App() {
   // Admin States
   const [targetId, setTargetId] = useState('');
   const [searchedUser, setSearchedUser] = useState(null);
-  const [userWithdraws, setUserWithdraws] = useState([]);
   const [editBal, setEditBal] = useState('');
   const [editVip, setEditVip] = useState(false);
   const [taskName, setTaskName] = useState('');
@@ -88,7 +87,7 @@ function App() {
     }
     setUser(uData);
     
-    const waitTime = 2 * 60 * 60 * 1000; // 2 hours spin cooldown
+    const waitTime = 2 * 60 * 60 * 1000; 
     const diff = waitTime - (Date.now() - (uData.last_spin || 0));
     setTimeLeft(diff > 0 ? diff : 0);
 
@@ -127,7 +126,7 @@ function App() {
 
   const handleGlobalClick = () => {
     if (isAdWatching && adTimer > 0) {
-      alert(`Please finish the advertisement: ${adTimer}s remaining!`);
+      alert(`ကြော်ငြာကြည့်ရှုရန် ကျန်ရှိချိန်: ${adTimer}စက္ကန့်!`);
       window.open(currentAdUrl.current, '_blank');
     }
   };
@@ -231,9 +230,8 @@ function App() {
   const handleCheckUser = async () => {
     if (!targetId) return;
     const { data: userData } = await supabase.from('users').select('*').eq('id', targetId).single();
-    const { data: wData } = await supabase.from('withdrawals').select('*').eq('user_id', targetId).eq('status', 'Pending');
     if (userData) { 
-        setSearchedUser(userData); setEditBal(userData.balance); setEditVip(userData.is_vip); setUserWithdraws(wData || []);
+        setSearchedUser(userData); setEditBal(userData.balance); setEditVip(userData.is_vip);
     } else { alert("User Not Found!"); }
   };
 
@@ -254,12 +252,14 @@ function App() {
     input: { width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '10px', border: '1px solid #000', boxSizing: 'border-box' },
     bottomNav: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#000', display: 'flex', justifyContent: 'space-around', padding: '10px', zIndex: 100 },
     navItem: (active) => ({ color: active ? '#facc15' : '#fff', textAlign: 'center', fontSize: '11px', fontWeight: 'bold', flex: 1, cursor: 'pointer' }),
+    dot: (c) => ({ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: c, marginRight: 8, border: '1px solid #000' }),
     copyBtn: { background: '#eee', border: '1px solid #000', fontSize: '10px', padding: '2px 6px', marginLeft: '5px', borderRadius: '5px', cursor: 'pointer' },
     wheelWrapper: { position: 'relative', width: 220, height: 220, margin: '20px auto' },
     wheelArrow: { position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
     wheel: { width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${spinOptions.map((o, i) => `${o.color} ${i * (360/spinOptions.length)}deg ${(i+1) * (360/spinOptions.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${spinRotation}deg)` },
     rewardStatusBox: { textAlign: 'center', marginBottom: 10, fontWeight: 'bold', fontSize: 13, display: 'flex', justifyContent: 'center', gap: '15px' },
-    overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#fff', textAlign: 'center' }
+    overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 2000, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#fff', textAlign: 'center', padding: 20 },
+    spinInfoGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px', marginTop: 15, textAlign: 'left', fontSize: '11px', background: '#f9f9f9', padding: 10, borderRadius: 10 }
   };
 
   if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>INITIALIZING...</div>;
@@ -267,12 +267,13 @@ function App() {
   return (
     <div style={styles.container} onClick={handleGlobalClick}>
       
-      {/* AD BLOCKER OVERLAY */}
+      {/* STRICT AD OVERLAY */}
       {isAdWatching && (
         <div style={styles.overlay}>
-           <h2 style={{color: '#facc15'}}>ADS PROCESSING...</h2>
-           <div style={{fontSize: 50, fontWeight: 'bold', margin: '20px 0'}}>{adTimer}s</div>
-           <p>Please wait until the timer ends.<br/>Reward will be added automatically.</p>
+           <h2 style={{color: '#facc15'}}>ADVERTISING...</h2>
+           <div style={{fontSize: 60, fontWeight: 'bold', margin: '20px 0'}}>{adTimer}s</div>
+           <p>ကျေးဇူးပြု၍ ခေတ္တစောင့်ဆိုင်းပေးပါ...<br/>အချိန်ပြည့်မှ Reward ရရှိပါမည်။</p>
+           <button onClick={() => window.open(currentAdUrl.current, '_blank')} style={{...styles.btn, background: '#fff', color: '#000', marginTop: 20}}>RE-OPEN AD</button>
         </div>
       )}
 
@@ -311,11 +312,21 @@ function App() {
                 <button onClick={handleSpin} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#00d2ff'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
                   {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'SPIN NOW (20s AD)'}
                 </button>
+                
+                {/* SPIN INFO DOTS */}
+                <div style={styles.spinInfoGrid}>
+                    {spinOptions.map((o,i) => (
+                        <div key={i} style={{display:'flex', alignItems:'center'}}>
+                            <span style={styles.dot(o.color)}></span>
+                            <span>{o.amt} TON</span>
+                        </div>
+                    ))}
+                </div>
             </div>
           ) : subTab === 'admin' ? (
             <div style={styles.card}>
               <h3 style={{marginTop:0}}>Admin Panel</h3>
-              <input style={styles.input} placeholder="Search UID" value={targetId} onChange={e=>setTargetId(e.target.value)} />
+              <input style={styles.input} placeholder="Search User UID" value={targetId} onChange={e=>setTargetId(e.target.value)} />
               <button style={{...styles.btn, width:'100%', marginBottom:10}} onClick={handleCheckUser}>CHECK USER</button>
               {searchedUser && (
                 <div style={{background:'#f0f9ff', padding:15, borderRadius:10, border:'1px solid #000', marginBottom:10}}>
@@ -324,11 +335,10 @@ function App() {
                   <select style={styles.input} value={editVip} onChange={e=>setEditVip(e.target.value === 'true')}>
                     <option value="false">Standard</option><option value="true">VIP ⭐</option>
                   </select>
-                  <button style={{...styles.btn, width:'100%', background:'green', marginBottom:15}} onClick={handleUpdateUser}>UPDATE DATA</button>
+                  <button style={{...styles.btn, width:'100%', background:'green'}} onClick={handleUpdateUser}>UPDATE DATA</button>
                 </div>
               )}
               <hr/>
-              <h4>Tasks Control</h4>
               <input style={styles.input} placeholder="Task Name" value={taskName} onChange={e=>setTaskName(e.target.value)} />
               <input style={styles.input} placeholder="Link" value={taskLink} onChange={e=>setTaskLink(e.target.value)} />
               <select style={styles.input} value={taskType} onChange={e=>setTaskType(e.target.value)}>
@@ -341,15 +351,15 @@ function App() {
             </div>
           ) : (
             tasks.filter(t => t.type === subTab).map(t => {
-              const isDone = user.completed_tasks?.includes(t.id);
-              return (
-                <div key={t.id} style={styles.card}>
-                  <span style={{fontWeight:'bold'}}>{t.name}</span>
-                  <button onClick={()=>handleStartTask(t)} disabled={isDone} style={{...styles.btn, float:'right', padding:'8px 15px', background: isDone ? '#ccc' : '#000'}}>
-                    {isDone ? 'DONE ✅' : 'START'}
-                  </button>
-                </div>
-              )
+                const isDone = user.completed_tasks?.includes(t.id);
+                return (
+                    <div key={t.id} style={styles.card}>
+                        <span style={{fontWeight:'bold'}}>{t.name}</span>
+                        <button onClick={()=>handleStartTask(t)} disabled={isDone} style={{...styles.btn, float:'right', padding:'8px 15px', background: isDone ? '#444' : '#000'}}>
+                            {isDone ? 'DONE ✅' : 'START'}
+                        </button>
+                    </div>
+                )
             })
           )
         )}
@@ -357,7 +367,7 @@ function App() {
         {mainTab === 'invite' && (
           <div style={{...styles.card, textAlign:'center'}}>
             <h3>Invite & Earn</h3>
-            <p style={{color:'green', fontWeight:'bold'}}>Invite Reward: +0.005 TON!</p>
+            <p style={{color:'green', fontWeight:'bold'}}>Invite Friend: +0.005 TON Reward!</p>
             <div style={{background:'#eee', padding:15, borderRadius:10, wordBreak:'break-all', marginBottom:15}}>
                 <code>https://t.me/EasyTONFree_Bot?start={user.id}</code>
             </div>
