@@ -9,7 +9,7 @@ const supabase = createClient(
 );
 const ADMIN_ID = "1793453606"; 
 
-// Alternating Ad Links: [0] Adsterra, [1] Advertic
+// Ad Links for alternating: Adsterra and Advertic
 const AD_LINKS = [
   "https://data527.click/a674e1237b7e268eb5f6/ff9984d88d/?placementName=default",
   "https://www.profitablecpmratenetwork.com/pmi0yt9u?key=3580805003ccb6983acba9b61b6cb7e2"
@@ -54,7 +54,7 @@ function App() {
   const [adTimer, setAdTimer] = useState(0);
   const [pendingAction, setPendingAction] = useState(null);
   const currentAdUrl = useRef(AD_LINKS[0]);
-  const adToggle = useRef(0); // For alternating between links
+  const adToggle = useRef(0); 
 
   const spinOptions = [
     { amt: 0.00009, color: '#007AFF', label: 'Blue' },   
@@ -115,12 +115,12 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // Alternating Ad Logic
+  // Trigger Ad with Alternating Logic
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     
     const selectedAd = AD_LINKS[adToggle.current % 2];
-    adToggle.current += 1; // Increment to switch next time
+    adToggle.current += 1; 
 
     currentAdUrl.current = selectedAd;
     setIsAdWatching(true);
@@ -189,14 +189,14 @@ function App() {
     });
   };
 
-  // Fixed: Social/Bot Tasks trigger link and alternating ad
+  // Fixed: Open Link and Ad simultaneously. Add TON and change to DONE after 20s.
   const handleStartTask = (task) => {
     if (user.completed_tasks?.includes(task.id)) return;
     
-    // Open task link
+    // Open the Social/Bot task link
     window.open(task.link, '_blank');
     
-    // Trigger Alternating Ad (20s)
+    // Trigger the 20s Ad immediately
     triggerAd(20, async () => { 
         const updatedTasks = [...(user.completed_tasks || []), task.id];
         const newBalance = user.balance + 0.001;
@@ -208,7 +208,7 @@ function App() {
         
         if(!error) {
           setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
-          alert("Task Verified! +0.001 TON Added ✅"); 
+          alert("Task Done! +0.001 TON Added ✅"); 
           fetchAllData();
         }
     });
@@ -232,6 +232,7 @@ function App() {
     });
   };
 
+  // --- ADMIN TOOLS ---
   const handleCheckUser = async () => {
     if (!targetId) return;
     const { data: userData } = await supabase.from('users').select('*').eq('id', targetId).single();
@@ -421,8 +422,8 @@ function App() {
             </div>
             <div style={styles.card}>
               <h4>Withdraw TON</h4>
-              <input style={styles.input} placeholder="TON Address" value={withdrawAddr} onChange={e=>setWithdrawAddr(e.target.value)} />
-              <input style={styles.input} placeholder="Amount (Min 0.1)" type="number" value={withdrawAmt} onChange={e=>setWithdrawAmt(e.target.value)} />
+              <input style={styles.input} placeholder="TON Address" value={withdrawAddr} onChange={setWithdrawAddr} />
+              <input style={styles.input} placeholder="Amount (Min 0.1)" type="number" value={withdrawAmt} onChange={setWithdrawAmt} />
               <button onClick={handleWithdraw} style={{...styles.btn, width:'100%', background:'#0052ff'}}>WITHDRAW (20s AD)</button>
             </div>
             {withdraws.map((w,i) => (
