@@ -127,10 +127,9 @@ function App() {
     window.open(randomAd, '_blank');
   };
 
-  // Warning when user clicks app during ad
   const handleGlobalClick = () => {
     if (isAdWatching && adTimer > 0) {
-      alert("Watch the full time‼️");
+      alert("Please wait! Ad is still running‼️");
       window.open(currentAdUrl.current, '_blank');
     }
   };
@@ -148,6 +147,8 @@ function App() {
     }
     return () => clearInterval(timer);
   }, [isAdWatching, adTimer, pendingAction]);
+
+  // --- EARNING FUNCTIONS ---
 
   const handleWatchAds = () => {
     triggerAd(30, async () => {
@@ -205,15 +206,23 @@ function App() {
     });
   };
 
-  // --- TASK DONE LOGIC (ONE TIME) ---
+  // --- BOT & SOCIAL TASK HANDLER (One-Time Reward) ---
   const handleStartTask = async (task) => {
-    if (user.id !== ADMIN_ID && user.completed_tasks?.includes(task.id)) return alert("Task already completed!");
+    // Check if already done
+    if (user.completed_tasks?.includes(task.id)) {
+        return alert("Task already completed!");
+    }
     
+    // 1. Open the Bot/Social Link first
     window.open(task.link, '_blank');
 
+    // 2. Trigger the 25s Ad/Timer
     triggerAd(25, async () => {
+        // 3. After Timer finishes, provide reward and mark as DONE
         const updatedTasks = [...(user.completed_tasks || []), task.id];
-        const newBalance = user.balance + 0.001;
+        const reward = 0.001; // Standard task reward
+        const newBalance = user.balance + reward;
+        
         const { error } = await supabase.from('users').update({ 
           balance: newBalance, 
           completed_tasks: updatedTasks 
@@ -221,8 +230,10 @@ function App() {
         
         if(!error) {
           setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
-          alert("Task Completed! +0.001 TON Added ✅"); 
+          alert(`Task Completed! +${reward} TON Added ✅`); 
           fetchAllData();
+        } else {
+          alert("Error updating task. Please try again.");
         }
     });
   };
@@ -292,9 +303,9 @@ function App() {
   return (
     <div style={styles.container} onClick={handleGlobalClick}>
       
-      {/* Floating Timer Badge (Replaces black screen) */}
+      {/* Timer Badge - Floating Status */}
       {isAdWatching && adTimer > 0 && (
-        <div style={styles.timerBadge}>⏳ Watch Ad: {adTimer}s</div>
+        <div style={styles.timerBadge}>⌛ Processing: {adTimer}s</div>
       )}
 
       {/* Header / Balance */}
@@ -317,7 +328,7 @@ function App() {
         <div style={{display:'flex', gap:5, marginBottom:15}}>
           {['bot', 'social', 'reward', 'admin'].map(tab => (
             (tab !== 'admin' || user.id === ADMIN_ID) && 
-            <button key={tab} onClick={() => { if(tab === 'reward' || tab === 'admin') setSubTab(tab); else triggerAd(10, () => setSubTab(tab)); }} style={{flex:1, padding:10, fontSize:10, borderRadius:10, background:subTab===tab?'#000':'#fff', color:subTab===tab?'#fff':'#000', border:'2px solid #000', fontWeight:'bold'}}>
+            <button key={tab} onClick={() => setSubTab(tab)} style={{flex:1, padding:10, fontSize:10, borderRadius:10, background:subTab===tab?'#000':'#fff', color:subTab===tab?'#fff':'#000', border:'2px solid #000', fontWeight:'bold'}}>
               {tab.toUpperCase()}
             </button>
           ))}
@@ -395,11 +406,13 @@ function App() {
               }}>CREATE PROMO</button>
             </div>
           ) : (
-            // TASK FILTERING: Only show tasks NOT completed by this user
+            // TASK LISTING: Filters out completed tasks
             tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(t.id)).map(t => (
               <div key={t.id} style={styles.card}>
-                <span style={{fontWeight:'bold'}}>{t.name}</span>
-                <button onClick={()=>handleStartTask(t)} style={{...styles.btn, float:'right', padding:'8px 15px'}}>START</button>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                    <span style={{fontWeight:'bold'}}>{t.name}</span>
+                    <button onClick={()=>handleStartTask(t)} style={{...styles.btn, padding:'8px 15px', background:'#007bff'}}>START</button>
+                </div>
               </div>
             ))
           )
@@ -478,11 +491,11 @@ function App() {
 
       {/* Bottom Nav */}
       <div style={styles.bottomNav}>
-        <div onClick={()=>triggerAd(10, () => setMainTab('earn'))} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
-        <div onClick={()=>triggerAd(10, () => setMainTab('invite'))} style={styles.navItem(mainTab==='invite')}>👥<br/>INVITE</div>
-        <div onClick={()=>triggerAd(10, () => setMainTab('rank'))} style={styles.navItem(mainTab==='rank')}>🏆<br/>RANK</div>
-        <div onClick={()=>triggerAd(10, () => setMainTab('withdraw'))} style={styles.navItem(mainTab==='withdraw')}>💳<br/>CASH</div>
-        <div onClick={()=>triggerAd(10, () => setMainTab('profile'))} style={styles.navItem(mainTab==='profile')}>👤<br/>PROFILE</div>
+        <div onClick={()=>setMainTab('earn')} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
+        <div onClick={()=>setMainTab('invite')} style={styles.navItem(mainTab==='invite')}>👥<br/>INVITE</div>
+        <div onClick={()=>setMainTab('rank')} style={styles.navItem(mainTab==='rank')}>🏆<br/>RANK</div>
+        <div onClick={()=>setMainTab('withdraw')} style={styles.navItem(mainTab==='withdraw')}>💳<br/>CASH</div>
+        <div onClick={()=>setMainTab('profile')} style={styles.navItem(mainTab==='profile')}>👤<br/>PROFILE</div>
       </div>
     </div>
   );
