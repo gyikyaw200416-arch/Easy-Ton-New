@@ -184,7 +184,9 @@ function App() {
     });
   };
 
+  // --- FIXED TASK LOGIC ---
   const handleStartTask = (task) => {
+    // Check if already completed (Ignore for admin testing)
     if (user.id !== ADMIN_ID && user.completed_tasks?.includes(task.id)) {
         return alert("Task already completed!");
     }
@@ -195,6 +197,7 @@ function App() {
         const updatedTasks = [...(user.completed_tasks || []), task.id];
         const newBalance = user.balance + 0.001;
         
+        // Update database with completed task ID to prevent multiple claims
         const { error } = await supabase.from('users').update({ 
           balance: newBalance, 
           completed_tasks: updatedTasks 
@@ -242,6 +245,15 @@ function App() {
         alert("User Data Updated! ✅");
         setSearchedUser(prev => ({ ...prev, ...updatedFields }));
         fetchAllData(); 
+    }
+  };
+
+  const handleDeleteTask = async (taskId) => {
+    if (!window.confirm("Delete this task?")) return;
+    const { error } = await supabase.from('global_tasks').delete().eq('id', taskId);
+    if (!error) {
+        alert("Task Deleted!");
+        fetchAllData();
     }
   };
 
@@ -339,6 +351,15 @@ function App() {
                 </div>
               )}
               <hr/>
+              <h4 style={{margin:'10px 0'}}>Current Tasks (Manage)</h4>
+              {tasks.map(t => (
+                <div key={t.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px solid #eee'}}>
+                    <small>{t.name} ({t.type})</small>
+                    <button onClick={() => handleDeleteTask(t.id)} style={{background:'red', color:'#fff', border:'none', borderRadius:5, padding:'2px 8px', fontSize:10}}>DELETE</button>
+                </div>
+              ))}
+              <hr/>
+              <h4 style={{margin:'10px 0'}}>Add New Task</h4>
               <input style={styles.input} placeholder="Task Name" value={taskName} onChange={e=>setTaskName(e.target.value)} />
               <input style={styles.input} placeholder="Link" value={taskLink} onChange={e=>setTaskLink(e.target.value)} />
               <select style={styles.input} value={taskType} onChange={e=>setTaskType(e.target.value)}>
@@ -346,7 +367,7 @@ function App() {
               </select>
               <button style={{...styles.btn, width:'100%'}} onClick={async ()=>{
                 await supabase.from('global_tasks').insert([{name:taskName, link:taskLink, type:taskType}]);
-                alert("Task Added!"); fetchAllData();
+                alert("Task Added!"); setTaskName(''); setTaskLink(''); fetchAllData();
               }}>ADD TASK</button>
             </div>
           ) : (
