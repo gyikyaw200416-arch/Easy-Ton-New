@@ -9,10 +9,10 @@ const supabase = createClient(
 );
 const ADMIN_ID = "1793453606"; 
 
-// Ad Links for Alternating (Adsterra & Advertic)
+// Alternating Ad Links: [0] is Adsterra, [1] is Advertic
 const AD_LINKS = [
-  "https://data527.click/a674e1237b7e268eb5f6/ff9984d88d/?placementName=default", // Adsterra
-  "https://www.profitablecpmratenetwork.com/pmi0yt9u?key=3580805003ccb6983acba9b61b6cb7e2"  // Advertic
+  "https://data527.click/a674e1237b7e268eb5f6/ff9984d88d/?placementName=default",
+  "https://www.profitablecpmratenetwork.com/pmi0yt9u?key=3580805003ccb6983acba9b61b6cb7e2"
 ];
 
 function App() {
@@ -54,7 +54,7 @@ function App() {
   const [adTimer, setAdTimer] = useState(0);
   const [pendingAction, setPendingAction] = useState(null);
   const currentAdUrl = useRef(AD_LINKS[0]);
-  const adIndex = useRef(0); // For alternating ads
+  const lastAdIndex = useRef(0); // For alternating logic
 
   const spinOptions = [
     { amt: 0.00009, color: '#007AFF', label: 'Blue' },   
@@ -115,28 +115,27 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- MODIFIED AD TRIGGER FOR ALTERNATING LINKS ---
+  // --- ALTERNATING AD TRIGGER ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     
-    // Switch between Adsterra and Advertic
-    const currentAd = AD_LINKS[adIndex.current];
-    currentAdUrl.current = currentAd;
-    
-    // Move to next index for next time
-    adIndex.current = (adIndex.current + 1) % AD_LINKS.length;
+    // Switch between Advertic and Adsterra
+    const nextIndex = lastAdIndex.current === 0 ? 1 : 0;
+    const selectedAd = AD_LINKS[nextIndex];
+    lastAdIndex.current = nextIndex;
 
+    currentAdUrl.current = selectedAd;
     setIsAdWatching(true);
     setAdTimer(duration);
     setPendingAction(() => callback);
-    window.open(currentAd, '_blank');
+    window.open(selectedAd, '_blank');
   };
 
   const handleGlobalClick = (e) => {
     if (isAdWatching && adTimer > 0) {
       e.preventDefault();
       e.stopPropagation();
-      alert(`Please watch the ad for the full 20s ‼️\nRemaining: ${adTimer}s`);
+      alert(`Watch the full time 20s ‼️\nRemaining: ${adTimer}s`);
       window.open(currentAdUrl.current, '_blank');
     }
   };
@@ -154,6 +153,31 @@ function App() {
     }
     return () => clearInterval(timer);
   }, [isAdWatching, adTimer, pendingAction]);
+
+  // --- UPDATED TASK LOGIC: Opens Task Link + Ad Simultaneously ---
+  const handleStartTask = (task) => {
+    if (user.completed_tasks?.includes(task.id)) return;
+    
+    // 1. Open the Bot/Social link
+    window.open(task.link, '_blank');
+    
+    // 2. Immediately trigger the Ad and verification timer
+    triggerAd(20, async () => { 
+        const updatedTasks = [...(user.completed_tasks || []), task.id];
+        const newBalance = user.balance + 0.001;
+        
+        const { error } = await supabase.from('users').update({ 
+          balance: newBalance, 
+          completed_tasks: updatedTasks 
+        }).eq('id', user.id);
+        
+        if(!error) {
+          setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
+          alert("Task Done! +0.001 TON Added ✅"); 
+          fetchAllData();
+        }
+    });
+  };
 
   const handleWatchAds = () => {
     triggerAd(30, async () => {
@@ -189,31 +213,6 @@ function App() {
           setIsSpinning(false);
           fetchAllData();
         }, 4000);
-    });
-  };
-
-  // --- UPDATED TASK LOGIC FOR DUAL WINDOWS ---
-  const handleStartTask = (task) => {
-    if (user.completed_tasks?.includes(task.id)) return;
-    
-    // 1. Open the Telegram/Social Link
-    window.open(task.link, '_blank');
-    
-    // 2. Open Ad Link and lock screen for 20s
-    triggerAd(20, async () => { 
-        const updatedTasks = [...(user.completed_tasks || []), task.id];
-        const newBalance = user.balance + 0.001;
-        
-        const { error } = await supabase.from('users').update({ 
-          balance: newBalance, 
-          completed_tasks: updatedTasks 
-        }).eq('id', user.id);
-        
-        if(!error) {
-          setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
-          alert("Task Verified! Reward Added ✅"); 
-          fetchAllData();
-        }
     });
   };
 
@@ -323,7 +322,7 @@ function App() {
           ) : subTab === 'admin' ? (
             <div style={styles.card}>
               <h3 style={{marginTop:0}}>Admin Panel</h3>
-              <input style={styles.input} placeholder="Search User UID" value={targetId} onChange={e=>setTargetId(e.target.value)} />
+              <input style={styles.input} placeholder="Search User UID" value={targetId} onChange={setTargetId} />
               <button style={{...styles.btn, width:'100%', marginBottom:10}} onClick={handleCheckUser}>CHECK USER</button>
               {searchedUser && (
                 <div style={{background:'#f0f9ff', padding:15, borderRadius:10, border:'1px solid #000', marginBottom:10}}>
@@ -361,7 +360,7 @@ function App() {
               }}>ADD TASK</button>
             </div>
           ) : (
-            // Social/Bot Tasks with Verification Ad
+            // Social/Bot Logic: One time only, changes to DONE
             tasks.filter(t => t.type === subTab).map(t => (
               <div key={t.id} style={styles.card}>
                 <span style={{fontWeight:'bold'}}>{t.name}</span>
