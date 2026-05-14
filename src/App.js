@@ -124,6 +124,16 @@ function App() {
     window.open(randomAd, '_blank');
   };
 
+  const handleGlobalClick = (e) => {
+    // If ad is active but timer isn't done, force them back to ad
+    if (isAdWatching && adTimer > 0) {
+      e.preventDefault();
+      e.stopPropagation();
+      alert(`Watch the full time 20s ‼️\nRemaining: ${adTimer}s`);
+      window.open(currentAdUrl.current, '_blank');
+    }
+  };
+
   useEffect(() => {
     let timer;
     if (isAdWatching && adTimer > 0) {
@@ -178,8 +188,10 @@ function App() {
   const handleStartTask = (task) => {
     if (user.completed_tasks?.includes(task.id)) return;
     
+    // Open the task link immediately
     window.open(task.link, '_blank');
     
+    // Start background ad timer
     triggerAd(20, async () => { 
         const updatedTasks = [...(user.completed_tasks || []), task.id];
         const newBalance = user.balance + 0.001;
@@ -251,24 +263,18 @@ function App() {
     navItem: (active) => ({ color: active ? '#facc15' : '#fff', textAlign: 'center', fontSize: '11px', fontWeight: 'bold', flex: 1, cursor: 'pointer' }),
     copyBtn: { background: '#eee', border: '1px solid #000', fontSize: '10px', padding: '2px 6px', marginLeft: '5px', borderRadius: '5px', cursor: 'pointer' },
     wheelWrapper: { position: 'relative', width: 220, height: 220, margin: '20px auto' },
-    // Arrow tilted slightly to the right
-    wheelArrow: { position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%) rotate(15deg)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
+    // Arrow tilted to the right
+    wheelArrow: { position: 'absolute', top: -10, left: '60%', transform: 'translateX(-50%) rotate(25deg)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
     wheel: { width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${spinOptions.map((o, i) => `${o.color} ${i * (360/spinOptions.length)}deg ${(i+1) * (360/spinOptions.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${spinRotation}deg)` },
-    dot: (color) => ({ height: 10, width: 10, backgroundColor: color, borderRadius: '50%', display: 'inline-block', marginRight: 5, border: '1px solid #000' }),
-    // Background Status Text (instead of overlay)
-    bgStatus: { position: 'fixed', top: 10, right: 10, background: 'rgba(0,0,0,0.7)', color: '#fff', padding: '5px 10px', borderRadius: '5px', fontSize: '10px', zIndex: 1000 }
+    dot: (color) => ({ height: 10, width: 10, backgroundColor: color, borderRadius: '50%', display: 'inline-block', marginRight: 5, border: '1px solid #000' })
   };
 
   if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>INITIALIZING...</div>;
 
   return (
-    <div style={styles.container}>
+    <div style={styles.container} onClick={handleGlobalClick}>
       
-      {isAdWatching && (
-        <div style={styles.bgStatus}>
-          Ad Progress: {adTimer}s ⏳
-        </div>
-      )}
+      {/* Timer Overlay removed - Logic moved to handleGlobalClick alert */}
 
       <div style={{background:'#000', color:'#fff', padding:20, borderRadius:20, textAlign:'center', marginBottom:15, border: '2px solid #fff'}}>
          <small style={{opacity:0.7}}>MY TOTAL BALANCE</small>
@@ -350,14 +356,14 @@ function App() {
               }}>ADD TASK</button>
             </div>
           ) : (
-            // Social & Bot Tasks: Only one use allowed, shows DONE ✅
+            // Social/Bot Logic: One time only, changes to DONE
             tasks.filter(t => t.type === subTab).map(t => (
               <div key={t.id} style={styles.card}>
                 <span style={{fontWeight:'bold'}}>{t.name}</span>
                 {user.completed_tasks?.includes(t.id) ? (
-                  <button style={{...styles.btn, float:'right', background:'#34C759', padding:'8px 15px'}} disabled>DONE ✅</button>
+                    <button style={{...styles.btn, float:'right', background: '#34C759', padding:'8px 15px'}} disabled>DONE ✅</button>
                 ) : (
-                  <button onClick={()=>handleStartTask(t)} style={{...styles.btn, float:'right', padding:'8px 15px'}}>START</button>
+                    <button onClick={()=>handleStartTask(t)} style={{...styles.btn, float:'right', padding:'8px 15px'}}>START</button>
                 )}
               </div>
             ))
@@ -431,7 +437,7 @@ function App() {
           <div style={{...styles.card, textAlign:'center'}}>
             <h3>Profile</h3>
             <div style={{textAlign:'left', marginBottom:20, background: '#f9f9f9', padding: 15, borderRadius: 10}}>
-                <p><b>User ID:</b> {user.id}</p>
+                <p><b>ID:</b> {user.id}</p>
                 <p><b>Balance:</b> {user.balance.toFixed(5)} TON</p>
                 <p><b>Status:</b> {user.is_vip ? "VIP ⭐" : "Standard User"}</p>
             </div>
