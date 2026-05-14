@@ -9,9 +9,10 @@ const supabase = createClient(
 );
 const ADMIN_ID = "1793453606"; 
 
+// Ad Links for Alternating (Adsterra & Advertic)
 const AD_LINKS = [
-  "https://data527.click/a674e1237b7e268eb5f6/ff9984d88d/?placementName=default",
-  "https://www.profitablecpmratenetwork.com/pmi0yt9u?key=3580805003ccb6983acba9b61b6cb7e2"
+  "https://data527.click/a674e1237b7e268eb5f6/ff9984d88d/?placementName=default", // Adsterra
+  "https://www.profitablecpmratenetwork.com/pmi0yt9u?key=3580805003ccb6983acba9b61b6cb7e2"  // Advertic
 ];
 
 function App() {
@@ -53,6 +54,7 @@ function App() {
   const [adTimer, setAdTimer] = useState(0);
   const [pendingAction, setPendingAction] = useState(null);
   const currentAdUrl = useRef(AD_LINKS[0]);
+  const adIndex = useRef(0); // For alternating ads
 
   const spinOptions = [
     { amt: 0.00009, color: '#007AFF', label: 'Blue' },   
@@ -113,23 +115,28 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- CORE AD TRIGGER ---
+  // --- MODIFIED AD TRIGGER FOR ALTERNATING LINKS ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     
-    const randomAd = AD_LINKS[Math.floor(Math.random() * AD_LINKS.length)];
-    currentAdUrl.current = randomAd;
+    // Switch between Adsterra and Advertic
+    const currentAd = AD_LINKS[adIndex.current];
+    currentAdUrl.current = currentAd;
+    
+    // Move to next index for next time
+    adIndex.current = (adIndex.current + 1) % AD_LINKS.length;
+
     setIsAdWatching(true);
     setAdTimer(duration);
     setPendingAction(() => callback);
-    window.open(randomAd, '_blank');
+    window.open(currentAd, '_blank');
   };
 
   const handleGlobalClick = (e) => {
     if (isAdWatching && adTimer > 0) {
       e.preventDefault();
       e.stopPropagation();
-      alert(`Please watch the ad for the full time! ‼️\nRemaining: ${adTimer}s`);
+      alert(`Please watch the ad for the full 20s ‼️\nRemaining: ${adTimer}s`);
       window.open(currentAdUrl.current, '_blank');
     }
   };
@@ -185,14 +192,14 @@ function App() {
     });
   };
 
-  // --- UPDATED TASK LOGIC WITH MANDATORY AD ---
+  // --- UPDATED TASK LOGIC FOR DUAL WINDOWS ---
   const handleStartTask = (task) => {
     if (user.completed_tasks?.includes(task.id)) return;
     
-    // First, open the task destination (Telegram Bot or Social Link)
+    // 1. Open the Telegram/Social Link
     window.open(task.link, '_blank');
     
-    // Immediately trigger the unskippable verification ad
+    // 2. Open Ad Link and lock screen for 20s
     triggerAd(20, async () => { 
         const updatedTasks = [...(user.completed_tasks || []), task.id];
         const newBalance = user.balance + 0.001;
@@ -204,10 +211,8 @@ function App() {
         
         if(!error) {
           setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
-          alert("Task Verified & Done! +0.001 TON Added ✅"); 
+          alert("Task Verified! Reward Added ✅"); 
           fetchAllData();
-        } else {
-          alert("Error updating task. Please try again.");
         }
     });
   };
@@ -356,7 +361,7 @@ function App() {
               }}>ADD TASK</button>
             </div>
           ) : (
-            // Social/Bot Logic: One time only, changes to DONE
+            // Social/Bot Tasks with Verification Ad
             tasks.filter(t => t.type === subTab).map(t => (
               <div key={t.id} style={styles.card}>
                 <span style={{fontWeight:'bold'}}>{t.name}</span>
