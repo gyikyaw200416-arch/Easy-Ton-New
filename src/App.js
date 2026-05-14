@@ -115,7 +115,7 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- ALTERNATING AD LOGIC ---
+  // --- AD ENGINE ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     
@@ -151,6 +151,8 @@ function App() {
     }
     return () => clearInterval(timer);
   }, [isAdWatching, adTimer, pendingAction]);
+
+  // --- LOGIC FOR REWARDS ---
 
   const handleWatchAds = () => {
     triggerAd(30, async () => {
@@ -189,28 +191,32 @@ function App() {
     });
   };
 
-  // --- UPDATED TASK HANDLER (ADS + DONE STATUS) ---
+  // --- FIXED TASK HANDLER WITH ADS & PERSISTENT DONE STATE ---
   const handleStartTask = (task) => {
+    // Prevent clicking if already done
     if (user.completed_tasks?.includes(task.id)) return;
-    
-    // 1. Open task link immediately
+
+    // 1. Open the Task Link (Bot or Social)
     window.open(task.link, '_blank');
-    
-    // 2. Trigger 20s Ad requirement
-    triggerAd(20, async () => { 
-        const updatedTasks = [...(user.completed_tasks || []), task.id];
-        const newBalance = user.balance + 0.001;
-        
-        const { error } = await supabase.from('users').update({ 
-          balance: newBalance, 
-          completed_tasks: updatedTasks 
-        }).eq('id', user.id);
-        
-        if(!error) {
-          setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
-          alert("Task Verified! +0.001 TON Added ✅"); 
-          fetchAllData();
-        }
+
+    // 2. Start the 20s Ad
+    triggerAd(20, async () => {
+      const updatedTasks = [...(user.completed_tasks || []), task.id];
+      const newBalance = user.balance + 0.001; // Fixed reward for tasks
+
+      // Update Database
+      const { error } = await supabase
+        .from('users')
+        .update({ balance: newBalance, completed_tasks: updatedTasks })
+        .eq('id', user.id);
+
+      if (!error) {
+        setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
+        alert("Task Completed! +0.001 TON added ✅");
+        fetchAllData();
+      } else {
+        alert("Error saving task progress.");
+      }
     });
   };
 
@@ -260,7 +266,7 @@ function App() {
 
   const styles = {
     container: { backgroundColor: '#facc15', minHeight: '100vh', padding: '15px', paddingBottom: '100px', fontFamily: 'sans-serif', position: 'relative' },
-    card: { background: '#fff', padding: '15px', borderRadius: '15px', border: '2px solid #000', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    card: { background: '#fff', padding: '15px', borderRadius: '15px', border: '2px solid #000', marginBottom: '10px' },
     btn: { background: '#000', color: '#fff', padding: '12px', borderRadius: '10px', border: 'none', fontWeight: 'bold', cursor: 'pointer' },
     input: { width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '10px', border: '1px solid #000', boxSizing: 'border-box' },
     bottomNav: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#000', display: 'flex', justifyContent: 'space-around', padding: '10px', zIndex: 100 },
@@ -306,7 +312,7 @@ function App() {
       <div style={{minHeight:'45vh'}}>
         {mainTab === 'earn' && (
           subTab === 'spin' ? (
-              <div style={{...styles.card, flexDirection: 'column'}}>
+              <div style={{...styles.card, textAlign:'center'}}>
                 <h3 style={{marginTop:0}}>🎡 LUCKY SPIN</h3>
                 <div style={styles.wheelWrapper}><div style={styles.wheelArrow}></div><div style={styles.wheel}></div></div>
                 <button onClick={handleSpin} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#00d2ff'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
@@ -317,12 +323,12 @@ function App() {
                 </div>
               </div>
           ) : subTab === 'admin' ? (
-            <div style={{...styles.card, flexDirection: 'column', alignItems: 'flex-start'}}>
+            <div style={styles.card}>
               <h3 style={{marginTop:0}}>Admin Panel</h3>
               <input style={styles.input} placeholder="Search User UID" value={targetId} onChange={e=>setTargetId(e.target.value)} />
               <button style={{...styles.btn, width:'100%', marginBottom:10}} onClick={handleCheckUser}>CHECK USER</button>
               {searchedUser && (
-                <div style={{background:'#f0f9ff', padding:15, borderRadius:10, border:'1px solid #000', width: '100%', marginBottom:10, boxSizing: 'border-box'}}>
+                <div style={{background:'#f0f9ff', padding:15, borderRadius:10, border:'1px solid #000', marginBottom:10}}>
                   <p>UID: {searchedUser.id}</p>
                   <input style={styles.input} type="number" value={editBal} onChange={e=>setEditBal(e.target.value)} />
                   <select style={styles.input} value={editVip} onChange={e=>setEditVip(e.target.value === 'true')}>
@@ -331,17 +337,17 @@ function App() {
                   </select>
                   <button style={{...styles.btn, width:'100%', background:'green', marginBottom:15}} onClick={handleUpdateUser}>UPDATE DATA</button>
                   {userWithdraws.map(w => (
-                    <div key={w.id} style={{fontSize:11, marginBottom:10, display: 'flex', justifyContent: 'space-between', width: '100%'}}>
-                        <span>{w.amount} TON to {w.address.slice(0,10)}...</span>
-                        <button onClick={() => approveWithdraw(w.id)} style={{background:'blue', color:'#fff', border: 'none', padding: '4px', borderRadius: '5px'}}>Success</button>
+                    <div key={w.id} style={{fontSize:11, marginBottom:10}}>
+                        {w.amount} TON to {w.address.slice(0,10)}...
+                        <button onClick={() => approveWithdraw(w.id)} style={{float:'right', background:'blue', color:'#fff', borderRadius:5, border:'none', padding:'3px 8px'}}>Success</button>
                     </div>
                   ))}
                 </div>
               )}
-              <hr style={{width: '100%'}}/>
+              <hr/>
               <h4>Manage Tasks</h4>
               {tasks.map(t => (
-                <div key={t.id} style={{display:'flex', width: '100%', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #eee'}}>
+                <div key={t.id} style={{display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #eee'}}>
                    <span style={{fontSize:12}}>{t.name} ({t.type})</span>
                    <button onClick={async () => { if(window.confirm("Delete?")){ await supabase.from('global_tasks').delete().eq('id', t.id); fetchAllData(); } }} style={{background:'red', color:'#fff', border:'none', borderRadius:5, fontSize:10, padding:'3px 8px'}}>DELETE</button>
                 </div>
@@ -360,11 +366,11 @@ function App() {
             // Social/Bot Tasks
             tasks.filter(t => t.type === subTab).map(t => (
               <div key={t.id} style={styles.card}>
-                <span style={{fontWeight:'bold', fontSize: '14px'}}>{t.name}</span>
+                <span style={{fontWeight:'bold'}}>{t.name}</span>
                 {user.completed_tasks?.includes(t.id) ? (
-                    <button style={{...styles.btn, background: '#34C759', padding:'8px 15px'}} disabled>DONE ✅</button>
+                    <button style={{...styles.btn, float:'right', background: '#34C759', padding:'8px 15px'}} disabled>DONE ✅</button>
                 ) : (
-                    <button onClick={()=>handleStartTask(t)} style={{...styles.btn, padding:'8px 15px'}}>START</button>
+                    <button onClick={()=>handleStartTask(t)} style={{...styles.btn, float:'right', padding:'8px 15px'}}>START</button>
                 )}
               </div>
             ))
@@ -372,14 +378,14 @@ function App() {
         )}
 
         {mainTab === 'invite' && (
-          <div style={{...styles.card, flexDirection: 'column', textAlign:'center'}}>
+          <div style={{...styles.card, textAlign:'center'}}>
             <h3>Invite & Earn</h3>
             <p style={{color:'green', fontWeight:'bold'}}>Invite Friend: +0.005 TON Reward!</p>
-            <div style={{background:'#eee', padding:15, borderRadius:10, wordBreak:'break-all', marginBottom:15, width: '100%', boxSizing: 'border-box'}}>
+            <div style={{background:'#eee', padding:15, borderRadius:10, wordBreak:'break-all', marginBottom:15}}>
                 <code>t.me/EasyTONFree_Bot?start={user.id}</code>
             </div>
             <button onClick={() => {navigator.clipboard.writeText(`https://t.me/EasyTONFree_Bot?start=${user.id}`); alert("Copied!");}} style={{...styles.btn, width:'100%'}}>COPY LINK</button>
-            <div style={{marginTop:20, textAlign:'left', width: '100%'}}>
+            <div style={{marginTop:20, textAlign:'left'}}>
                <h4>Invite History</h4>
                {invites.map((inv, i) => (
                  <div key={i} style={{fontSize:11, padding:5, borderBottom:'1px solid #eee'}}>
@@ -392,7 +398,7 @@ function App() {
         )}
 
         {mainTab === 'rank' && (
-          <div style={{...styles.card, flexDirection: 'column'}}>
+          <div style={styles.card}>
             <h3 style={{textAlign:'center', marginTop:0}}>🏆 TOP 50 RANKINGS</h3>
             <table style={{width:'100%', fontSize:12, borderCollapse:'collapse'}}>
               <thead><tr style={{borderBottom:'2px solid #000'}}><th align="left">User ID</th><th align="right">Amount</th></tr></thead>
@@ -410,7 +416,7 @@ function App() {
 
         {mainTab === 'withdraw' && (
           <div>
-            <div style={{...styles.card, border: '2px solid gold', background: '#fffcf0', flexDirection: 'column', alignItems: 'flex-start'}}>
+            <div style={{...styles.card, border: '2px solid gold', background: '#fffcf0'}}>
                 <h4 style={{margin:0, color: '#b8860b'}}>💎 UPGRADE VIP (1 TON)</h4>
                 <p style={{fontSize:11, wordBreak:'break-all'}}>UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9 
                   <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText('UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9'); alert("Copied!");}}>COPY</span>
@@ -419,15 +425,15 @@ function App() {
                   <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(user.id); alert("Copied!");}}>COPY</span>
                 </p>
             </div>
-            <div style={{...styles.card, flexDirection: 'column', alignItems: 'flex-start'}}>
+            <div style={styles.card}>
               <h4>Withdraw TON</h4>
               <input style={styles.input} placeholder="TON Address" value={withdrawAddr} onChange={e=>setWithdrawAddr(e.target.value)} />
               <input style={styles.input} placeholder="Amount (Min 0.1)" type="number" value={withdrawAmt} onChange={e=>setWithdrawAmt(e.target.value)} />
               <button onClick={handleWithdraw} style={{...styles.btn, width:'100%', background:'#0052ff'}}>WITHDRAW (20s AD)</button>
             </div>
             {withdraws.map((w,i) => (
-              <div key={i} style={{...styles.card, flexDirection: 'column', alignItems: 'flex-start', fontSize:13}}>
-                <div style={{display:'flex', width: '100%', justifyContent:'space-between'}}><span>{w.amount} TON</span><span style={{color: w.status === 'Success' ? 'green' : 'orange', fontWeight:'bold'}}>{w.status}</span></div>
+              <div key={i} style={{...styles.card, fontSize:13}}>
+                <div style={{display:'flex', justifyContent:'space-between'}}><span>{w.amount} TON</span><span style={{color: w.status === 'Success' ? 'green' : 'orange', fontWeight:'bold'}}>{w.status}</span></div>
                 <small style={{color:'#888'}}>{new Date(w.created_at).toLocaleString()}</small>
               </div>
             ))}
@@ -435,9 +441,9 @@ function App() {
         )}
 
         {mainTab === 'profile' && (
-          <div style={{...styles.card, flexDirection: 'column', textAlign:'center'}}>
+          <div style={{...styles.card, textAlign:'center'}}>
             <h3>Profile</h3>
-            <div style={{textAlign:'left', width: '100%', marginBottom:20, background: '#f9f9f9', padding: 15, borderRadius: 10, boxSizing: 'border-box'}}>
+            <div style={{textAlign:'left', marginBottom:20, background: '#f9f9f9', padding: 15, borderRadius: 10}}>
                 <p><b>ID:</b> {user.id}</p>
                 <p><b>Balance:</b> {user.balance.toFixed(5)} TON</p>
                 <p><b>Status:</b> {user.is_vip ? "VIP ⭐" : "Standard User"}</p>
