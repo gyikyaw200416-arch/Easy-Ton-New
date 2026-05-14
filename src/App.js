@@ -51,7 +51,7 @@ function App() {
   const [adminPromoCode, setAdminPromoCode] = useState('');
   const [adminPromoValue, setAdminPromoValue] = useState('');
 
-  // --- ENFORCED AD STATES ---
+  // --- NEW ENFORCED AD STATES ---
   const [isAdWatching, setIsAdWatching] = useState(false);
   const [adTimer, setAdTimer] = useState(0);
   const [pendingAction, setPendingAction] = useState(null);
@@ -78,7 +78,6 @@ function App() {
     
     if (!uData) {
         const startParam = tg?.initDataUnsafe?.start_param;
-        // Referral Logic: Add 0.005 TON to Inviter
         if (startParam && startParam !== user.id) {
             const { data: inviter } = await supabase.from('users').select('balance').eq('id', startParam).single();
             if (inviter) {
@@ -118,7 +117,7 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- AD ENGINE (FORCED REDIRECT) ---
+  // --- NEW AD ENGINE (STRICT ENFORCEMENT) ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) {
       callback();
@@ -130,6 +129,14 @@ function App() {
     setAdTimer(duration);
     setPendingAction(() => callback);
     window.open(randomAd, '_blank');
+  };
+
+  // Warning when trying to skip the overlay
+  const handleOverlayWarning = () => {
+    if (isAdWatching && adTimer > 0) {
+      alert("Watch the full time‼️");
+      window.open(currentAdUrl.current, '_blank');
+    }
   };
 
   useEffect(() => {
@@ -151,7 +158,7 @@ function App() {
 
   const handleWatchAds = () => {
     triggerAd(30, async () => {
-      const reward = 0.001; // Auto Reward 0.001 TON
+      const reward = 0.001; 
       const newBalance = user.balance + reward;
       await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
       setUser(prev => ({ ...prev, balance: newBalance }));
@@ -205,9 +212,14 @@ function App() {
     });
   };
 
+  // Updated Task Flow: Open Link -> Trigger Ad -> Reward
   const handleStartTask = async (task) => {
-    if (user.completed_tasks?.includes(task.id)) return alert("Task already completed!");
+    if (user.id !== ADMIN_ID && user.completed_tasks?.includes(task.id)) return alert("Task already completed!");
+    
+    // First: Reach the link
     window.open(task.link, '_blank');
+
+    // Second: Trigger Ad timer. Reward only added AFTER timer finishes.
     triggerAd(20, async () => {
         const updatedTasks = [...(user.completed_tasks || []), task.id];
         const newBalance = user.balance + 0.001;
@@ -275,7 +287,7 @@ function App() {
     wheelArrow: { position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
     wheel: { width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${spinOptions.map((o, i) => `${o.color} ${i * (360/spinOptions.length)}deg ${(i+1) * (360/spinOptions.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${spinRotation}deg)` },
     watchText: { textAlign: 'center', marginBottom: 10, fontWeight: 'bold', fontSize: 13 },
-    adOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.98)', zIndex: 9999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#fff', textAlign: 'center', padding: 20 }
+    adOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.98)', zIndex: 9999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#fff', textAlign: 'center', padding: 20, cursor: 'not-allowed' }
   };
 
   if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>LOADING...</div>;
@@ -284,7 +296,7 @@ function App() {
     <div style={styles.container}>
       {/* AD OVERLAY ENFORCEMENT */}
       {isAdWatching && (
-        <div style={styles.adOverlay}>
+        <div style={styles.adOverlay} onClick={handleOverlayWarning}>
           <h2 style={{color: '#facc15'}}>ADVERTISING LOADING</h2>
           <p>Please watch the advertisement until the end...</p>
           <div style={{position: 'relative', margin: '25px 0'}}>
@@ -295,7 +307,7 @@ function App() {
             <div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: 28, fontWeight: 'bold'}}>{adTimer}</div>
           </div>
           <p style={{fontSize: 13, color: '#ff4b2b', fontWeight: 'bold'}}>WARNING: DO NOT CLOSE THE ADS PAGE!</p>
-          <button onClick={() => window.open(currentAdUrl.current, '_blank')} style={{...styles.btn, background: '#facc15', color: '#000', marginTop: 25, width: '80%'}}>RETURN TO ADVERTISEMENT</button>
+          <button onClick={(e) => { e.stopPropagation(); window.open(currentAdUrl.current, '_blank'); }} style={{...styles.btn, background: '#facc15', color: '#000', marginTop: 25, width: '80%'}}>RETURN TO ADVERTISEMENT</button>
         </div>
       )}
 
@@ -371,7 +383,7 @@ function App() {
                 </div>
               )}
               <hr/>
-              <h4>Manage Tasks (Delete)</h4>
+              <h4>Tasks (Admin View - All Visible)</h4>
               {tasks.map(t => (
                 <div key={t.id} style={{display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #eee'}}>
                    <span style={{fontSize:12}}>{t.name} ({t.type})</span>
@@ -399,7 +411,8 @@ function App() {
               }}>ADD TASK</button>
             </div>
           ) : (
-            tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(t.id)).map(t => (
+            // TASK FILTERING: Only show if NOT completed OR if user is ADMIN
+            tasks.filter(t => t.type === subTab && (user.id === ADMIN_ID || !user.completed_tasks?.includes(t.id))).map(t => (
               <div key={t.id} style={styles.card}>
                 <span style={{fontWeight:'bold'}}>{t.name}</span>
                 <button onClick={()=>handleStartTask(t)} style={{...styles.btn, float:'right', padding:'8px 15px'}}>START</button>
