@@ -51,7 +51,7 @@ function App() {
   const [adminPromoCode, setAdminPromoCode] = useState('');
   const [adminPromoValue, setAdminPromoValue] = useState('');
 
-  // --- STRICT ENFORCED AD STATES ---
+  // --- AD ENGINE STATES ---
   const [isAdWatching, setIsAdWatching] = useState(false);
   const [adTimer, setAdTimer] = useState(0);
   const [pendingAction, setPendingAction] = useState(null);
@@ -116,9 +116,9 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- AD ENGINE (STRICT ENFORCEMENT) ---
+  // --- ANTI-CHEAT AD LOGIC ---
   const triggerAd = (duration, callback) => {
-    if (user.id === ADMIN_ID) return callback(); // Admin bypass
+    if (user.id === ADMIN_ID) return callback(); 
     const randomAd = AD_LINKS[Math.floor(Math.random() * AD_LINKS.length)];
     currentAdUrl.current = randomAd;
     setIsAdWatching(true);
@@ -127,7 +127,8 @@ function App() {
     window.open(randomAd, '_blank');
   };
 
-  const handleOverlayWarning = () => {
+  // Warning when user clicks app during ad
+  const handleGlobalClick = () => {
     if (isAdWatching && adTimer > 0) {
       alert("Watch the full time‼️");
       window.open(currentAdUrl.current, '_blank');
@@ -204,14 +205,12 @@ function App() {
     });
   };
 
-  // --- TASK LOGIC (LINK -> AD -> REWARD -> DONE) ---
+  // --- TASK DONE LOGIC (ONE TIME) ---
   const handleStartTask = async (task) => {
     if (user.id !== ADMIN_ID && user.completed_tasks?.includes(task.id)) return alert("Task already completed!");
     
-    // 1. Open Link First
     window.open(task.link, '_blank');
 
-    // 2. Trigger Strict Ad
     triggerAd(25, async () => {
         const updatedTasks = [...(user.completed_tasks || []), task.id];
         const newBalance = user.balance + 0.001;
@@ -273,7 +272,7 @@ function App() {
   };
 
   const styles = {
-    container: { backgroundColor: '#facc15', minHeight: '100vh', padding: '15px', paddingBottom: '100px', fontFamily: 'sans-serif' },
+    container: { backgroundColor: '#facc15', minHeight: '100vh', padding: '15px', paddingBottom: '100px', fontFamily: 'sans-serif', position: 'relative' },
     card: { background: '#fff', padding: '15px', borderRadius: '15px', border: '2px solid #000', marginBottom: '10px' },
     btn: { background: '#000', color: '#fff', padding: '12px', borderRadius: '10px', border: 'none', fontWeight: 'bold', cursor: 'pointer' },
     input: { width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '10px', border: '1px solid #000', boxSizing: 'border-box' },
@@ -285,34 +284,17 @@ function App() {
     wheelArrow: { position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
     wheel: { width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${spinOptions.map((o, i) => `${o.color} ${i * (360/spinOptions.length)}deg ${(i+1) * (360/spinOptions.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${spinRotation}deg)` },
     rewardStatusBox: { textAlign: 'center', marginBottom: 10, fontWeight: 'bold', fontSize: 13, display: 'flex', justifyContent: 'center', gap: '15px' },
-    adOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.98)', zIndex: 9999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#fff', textAlign: 'center', padding: 20, cursor: 'not-allowed' },
-    timerBadge: { position: 'fixed', top: 20, right: 10, background: 'rgba(0,0,0,0.7)', color: '#fff', padding: '5px 10px', borderRadius: 20, fontSize: 12, zIndex: 10000, display: 'flex', alignItems: 'center', gap: 5 }
+    timerBadge: { position: 'fixed', top: 20, right: 10, background: 'rgba(255,0,0,0.9)', color: '#fff', padding: '8px 15px', borderRadius: 20, fontSize: 14, zIndex: 10000, fontWeight: 'bold', boxShadow: '0 0 10px rgba(0,0,0,0.5)' }
   };
 
   if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>LOADING...</div>;
 
   return (
-    <div style={styles.container}>
-      {/* AD OVERLAY ENFORCEMENT */}
-      {isAdWatching && (
-        <div style={styles.adOverlay} onClick={handleOverlayWarning}>
-          <h2 style={{color: '#facc15'}}>ADVERTISING LOADING</h2>
-          <p>Please watch the advertisement until the end...</p>
-          <div style={{position: 'relative', margin: '25px 0'}}>
-            <svg width="120" height="120">
-                <circle cx="60" cy="60" r="50" fill="none" stroke="#333" strokeWidth="8" />
-                <circle cx="60" cy="60" r="50" fill="none" stroke="#facc15" strokeWidth="8" strokeDasharray="314" strokeDashoffset={314 - (314 * (adTimer / 30))} style={{transition: 'stroke-dashoffset 1s linear'}} />
-            </svg>
-            <div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: 28, fontWeight: 'bold'}}>{adTimer}</div>
-          </div>
-          <p style={{fontSize: 13, color: '#ff4b2b', fontWeight: 'bold'}}>WARNING: DO NOT CLOSE THE ADS PAGE!</p>
-          <button onClick={(e) => { e.stopPropagation(); window.open(currentAdUrl.current, '_blank'); }} style={{...styles.btn, background: '#facc15', color: '#000', marginTop: 25, width: '80%'}}>RETURN TO ADVERTISEMENT</button>
-        </div>
-      )}
-
-      {/* Floating Timer Badge (as seen in image) */}
+    <div style={styles.container} onClick={handleGlobalClick}>
+      
+      {/* Floating Timer Badge (Replaces black screen) */}
       {isAdWatching && adTimer > 0 && (
-        <div style={styles.timerBadge}>⌛ Ad: {adTimer}s</div>
+        <div style={styles.timerBadge}>⏳ Watch Ad: {adTimer}s</div>
       )}
 
       {/* Header / Balance */}
@@ -322,7 +304,6 @@ function App() {
          {user.is_vip && <span style={{color:'#facc15', fontSize:12, fontWeight:'bold'}}>⭐ VIP MEMBER</span>}
       </div>
 
-      {/* Dynamic Reward Display (Normal vs VIP) */}
       <div style={styles.rewardStatusBox}>
         <span style={{ color: !user.is_vip ? '#28a745' : '#888' }}>Normal: 0.0003</span>
         <span style={{ color: user.is_vip ? '#28a745' : '#888' }}>VIP: 0.0008</span>
@@ -332,7 +313,6 @@ function App() {
         📺 WATCH ADS & EARN
       </button>
 
-      {/* Earn Sub-Tabs (Bot, Social, Reward, Admin) */}
       {mainTab === 'earn' && (
         <div style={{display:'flex', gap:5, marginBottom:15}}>
           {['bot', 'social', 'reward', 'admin'].map(tab => (
@@ -415,7 +395,7 @@ function App() {
               }}>CREATE PROMO</button>
             </div>
           ) : (
-            // TASK FILTERING: Only show if NOT completed
+            // TASK FILTERING: Only show tasks NOT completed by this user
             tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(t.id)).map(t => (
               <div key={t.id} style={styles.card}>
                 <span style={{fontWeight:'bold'}}>{t.name}</span>
