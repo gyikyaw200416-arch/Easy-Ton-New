@@ -116,7 +116,7 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- AD ENGINE LOGIC ---
+  // --- AD ENGINE (Strict Logic) ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     
@@ -152,7 +152,7 @@ function App() {
   }, [isAdWatching, adTimer, pendingAction]);
 
   const handleWatchAds = () => {
-    triggerAd(30, async () => { // "Watch Ads" is now 30s
+    triggerAd(30, async () => { // Watch Ads is 30s
       const reward = user.is_vip ? 0.0008 : 0.0003; 
       const newBalance = user.balance + reward;
       await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
@@ -166,7 +166,7 @@ function App() {
     if (user.id !== ADMIN_ID && timeLeft > 0) return alert("Please wait for the 2-hour cooldown!");
     if (isSpinning) return;
 
-    triggerAd(20, async () => {
+    triggerAd(20, async () => { // Spin is 20s
         setIsSpinning(true);
         const randomIndex = Math.floor(Math.random() * spinOptions.length);
         const segmentAngle = 360 / spinOptions.length;
@@ -191,7 +191,7 @@ function App() {
   };
 
   const handleRedeemPromo = () => {
-    triggerAd(20, async () => {
+    triggerAd(20, async () => { // Promo Claim is 20s
         const { data: promo } = await supabase.from('promo_codes').select('*').eq('code', promoCodeInput).single();
         if (!promo) return alert("Invalid Reward Code!");
         if (promo.used_by?.includes(user.id)) return alert("Code already used!");
@@ -212,10 +212,11 @@ function App() {
         return alert("Task already completed!");
     }
     
-    // Open Link First, then trigger Ad check
+    // 1. Open the external link first
     window.open(task.link, '_blank');
     
-    triggerAd(20, async () => {
+    // 2. Start the ad timer IMMEDIATELY for when they return to the app
+    triggerAd(20, async () => { 
         const updatedTasks = [...(user.completed_tasks || []), task.id];
         const newBalance = user.balance + 0.001;
         
@@ -233,7 +234,7 @@ function App() {
   };
 
   const handleWithdraw = () => {
-    triggerAd(20, async () => {
+    triggerAd(20, async () => { // Withdraw is 20s
         const amt = Number(withdrawAmt);
         if (amt < 0.1) return alert("Minimum 0.1 TON");
         if (amt > user.balance) return alert("Insufficient Balance!");
@@ -271,16 +272,18 @@ function App() {
   };
 
   const handleCreatePromo = async () => {
-    if (!adminPromoCode || !adminPromoValue) return alert("Fill all promo fields!");
+    if (!adminPromoCode || !adminPromoValue) return alert("Please enter both code and value!");
+    
     const { error } = await supabase.from('promo_codes').insert([
-      { code: adminPromoCode, value: Number(adminPromoValue), used_by: [] }
+        { code: adminPromoCode, value: Number(adminPromoValue), used_by: [] }
     ]);
+
     if (!error) {
-      alert("Promo Code Created! ✅");
-      setAdminPromoCode('');
-      setAdminPromoValue('');
+        alert("Reward Code Created Successfully! ✅");
+        setAdminPromoCode('');
+        setAdminPromoValue('');
     } else {
-      alert("Error creating promo!");
+        alert("Error creating Reward Code. It might already exist.");
     }
   };
 
