@@ -51,7 +51,7 @@ function App() {
   const [adminPromoCode, setAdminPromoCode] = useState('');
   const [adminPromoValue, setAdminPromoValue] = useState('');
 
-  // --- AD ENGINE STATES (Timer UI ဖျောက်ထားသည်) ---
+  // --- AD ENGINE STATES ---
   const [isAdWatching, setIsAdWatching] = useState(false);
   const [adTimer, setAdTimer] = useState(0);
   const [pendingAction, setPendingAction] = useState(null);
@@ -116,12 +116,11 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- AD ENGINE (Alert UI Only) ---
+  // --- AD ENGINE LOGIC ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     
-    // Alert မှာ ၂၀ စက္ကန့်စောင့်ရန် အသိပေးခြင်း
-    alert(`Please watch the ad for ${duration}s to get rewards! ⏳`);
+    alert(`Please watch the ad for ${duration}s to proceed! ⏳`);
     
     const randomAd = AD_LINKS[Math.floor(Math.random() * AD_LINKS.length)];
     currentAdUrl.current = randomAd;
@@ -133,7 +132,7 @@ function App() {
 
   const handleGlobalClick = () => {
     if (isAdWatching && adTimer > 0) {
-      alert(`Stay on the ad! Still ${adTimer}s remaining... ⏳`);
+      alert(`Ad must be viewed for ${adTimer} more seconds! ⏳`);
       window.open(currentAdUrl.current, '_blank');
     }
   };
@@ -153,7 +152,7 @@ function App() {
   }, [isAdWatching, adTimer, pendingAction]);
 
   const handleWatchAds = () => {
-    triggerAd(20, async () => {
+    triggerAd(30, async () => { // "Watch Ads" is now 30s
       const reward = user.is_vip ? 0.0008 : 0.0003; 
       const newBalance = user.balance + reward;
       await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
@@ -192,7 +191,6 @@ function App() {
   };
 
   const handleRedeemPromo = () => {
-    // Reward Button (Promo) အတွက် Ads ထည့်သွင်းခြင်း
     triggerAd(20, async () => {
         const { data: promo } = await supabase.from('promo_codes').select('*').eq('code', promoCodeInput).single();
         if (!promo) return alert("Invalid Reward Code!");
@@ -214,9 +212,10 @@ function App() {
         return alert("Task already completed!");
     }
     
-    // Social/Bot Tasks တွေအတွက် Ads logic ပြန်ညှိခြင်း
+    // Open Link First, then trigger Ad check
+    window.open(task.link, '_blank');
+    
     triggerAd(20, async () => {
-        window.open(task.link, '_blank');
         const updatedTasks = [...(user.completed_tasks || []), task.id];
         const newBalance = user.balance + 0.001;
         
@@ -251,7 +250,7 @@ function App() {
     });
   };
 
-  // Admin Tools
+  // --- ADMIN TOOLS ---
   const handleCheckUser = async () => {
     if (!targetId) return;
     const { data: userData } = await supabase.from('users').select('*').eq('id', targetId).single();
@@ -268,6 +267,20 @@ function App() {
         alert("User Data Updated! ✅");
         setSearchedUser(prev => ({ ...prev, ...updatedFields }));
         fetchAllData(); 
+    }
+  };
+
+  const handleCreatePromo = async () => {
+    if (!adminPromoCode || !adminPromoValue) return alert("Fill all promo fields!");
+    const { error } = await supabase.from('promo_codes').insert([
+      { code: adminPromoCode, value: Number(adminPromoValue), used_by: [] }
+    ]);
+    if (!error) {
+      alert("Promo Code Created! ✅");
+      setAdminPromoCode('');
+      setAdminPromoValue('');
+    } else {
+      alert("Error creating promo!");
     }
   };
 
@@ -297,8 +310,6 @@ function App() {
   return (
     <div style={styles.container} onClick={handleGlobalClick}>
       
-      {/* Floating Timer Badge ကို ဖြုတ်လိုက်ပါပြီ */}
-
       <div style={{background:'#000', color:'#fff', padding:20, borderRadius:20, textAlign:'center', marginBottom:15, border: '2px solid #fff'}}>
          <small style={{opacity:0.7}}>MY TOTAL BALANCE</small>
          <h1 style={{margin:'5px 0', fontSize:32}}>{user.balance.toFixed(5)} TON</h1>
@@ -311,14 +322,14 @@ function App() {
       </div>
 
       <button onClick={handleWatchAds} style={{...styles.btn, width:'100%', background:'linear-gradient(to right, #ff416c, #ff4b2b)', marginBottom:15, height:50, fontSize:16, border:'2px solid #000'}}>
-        📺 WATCH ADS & EARN
+        📺 WATCH ADS & EARN (30s)
       </button>
 
       {mainTab === 'earn' && (
         <div style={{display:'flex', gap:5, marginBottom:15}}>
           {['bot', 'social', 'reward', 'admin'].map(tab => (
             (tab !== 'admin' || user.id === ADMIN_ID) && 
-            <button key={tab} onClick={() => { if(tab === 'admin') setSubTab(tab); else triggerAd(10, () => setSubTab(tab)); }} style={{flex:1, padding:10, fontSize:10, borderRadius:10, background:subTab===tab?'#000':'#fff', color:subTab===tab?'#fff':'#000', border:'2px solid #000', fontWeight:'bold'}}>
+            <button key={tab} onClick={() => { if(tab === 'admin') setSubTab(tab); else triggerAd(20, () => setSubTab(tab)); }} style={{flex:1, padding:10, fontSize:10, borderRadius:10, background:subTab===tab?'#000':'#fff', color:subTab===tab?'#fff':'#000', border:'2px solid #000', fontWeight:'bold'}}>
               {tab.toUpperCase()}
             </button>
           ))}
@@ -368,7 +379,7 @@ function App() {
                 </div>
               )}
               <hr/>
-              <h4>Tasks (Admin View)</h4>
+              <h4>Tasks</h4>
               {tasks.map(t => (
                 <div key={t.id} style={{display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #eee'}}>
                    <span style={{fontSize:12}}>{t.name} ({t.type})</span>
@@ -390,10 +401,7 @@ function App() {
               <h4>Reward Code</h4>
               <input style={styles.input} placeholder="Code Name" value={adminPromoCode} onChange={e=>setAdminPromoCode(e.target.value)} />
               <input style={styles.input} placeholder="TON Value" type="number" value={adminPromoValue} onChange={e=>setAdminPromoValue(e.target.value)} />
-              <button style={{...styles.btn, width:'100%', background:'#ff9900'}} onClick={async ()=>{
-                await supabase.from('promo_codes').insert([{code:adminPromoCode, value:Number(adminPromoValue), used_by:[]}]);
-                alert("Promo Code Created!");
-              }}>CREATE PROMO</button>
+              <button style={{...styles.btn, width:'100%', background:'#ff9900'}} onClick={handleCreatePromo}>CREATE PROMO</button>
             </div>
           ) : (
             tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(t.id)).map(t => (
@@ -477,11 +485,11 @@ function App() {
       </div>
 
       <div style={styles.bottomNav}>
-        <div onClick={()=>triggerAd(10, () => setMainTab('earn'))} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
-        <div onClick={()=>triggerAd(10, () => setMainTab('invite'))} style={styles.navItem(mainTab==='invite')}>👥<br/>INVITE</div>
-        <div onClick={()=>triggerAd(10, () => setMainTab('rank'))} style={styles.navItem(mainTab==='rank')}>🏆<br/>RANK</div>
-        <div onClick={()=>triggerAd(10, () => setMainTab('withdraw'))} style={styles.navItem(mainTab==='withdraw')}>💳<br/>CASH</div>
-        <div onClick={()=>triggerAd(10, () => setMainTab('profile'))} style={styles.navItem(mainTab==='profile')}>👤<br/>PROFILE</div>
+        <div onClick={()=>triggerAd(20, () => setMainTab('earn'))} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
+        <div onClick={()=>triggerAd(20, () => setMainTab('invite'))} style={styles.navItem(mainTab==='invite')}>👥<br/>INVITE</div>
+        <div onClick={()=>triggerAd(20, () => setMainTab('rank'))} style={styles.navItem(mainTab==='rank')}>🏆<br/>RANK</div>
+        <div onClick={()=>triggerAd(20, () => setMainTab('withdraw'))} style={styles.navItem(mainTab==='withdraw')}>💳<br/>CASH</div>
+        <div onClick={()=>triggerAd(20, () => setMainTab('profile'))} style={styles.navItem(mainTab==='profile')}>👤<br/>PROFILE</div>
       </div>
     </div>
   );
