@@ -115,25 +115,32 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- ALTERNATING AD LOGIC ---
+  // --- ALTERNATING AD LOGIC (SECURE) ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     
     const selectedAd = AD_LINKS[adToggle.current % 2];
     adToggle.current += 1;
 
+    // Secure Pop-up check
+    const adWindow = window.open(selectedAd, '_blank');
+
+    if (!adWindow || adWindow.closed || typeof adWindow.closed === 'undefined') {
+        alert("AD BLOCKED! ‼️\nPlease allow pop-ups for this site to earn rewards.");
+        return; 
+    }
+
     currentAdUrl.current = selectedAd;
     setIsAdWatching(true);
     setAdTimer(duration);
     setPendingAction(() => callback);
-    window.open(selectedAd, '_blank');
   };
 
   const handleGlobalClick = (e) => {
     if (isAdWatching && adTimer > 0) {
       e.preventDefault();
       e.stopPropagation();
-      alert(`Watch the full time 20s ‼️\nRemaining: ${adTimer}s`);
+      alert(`Please watch the ad! ${adTimer}s remaining.`);
       window.open(currentAdUrl.current, '_blank');
     }
   };
@@ -158,7 +165,7 @@ function App() {
       const newBalance = user.balance + reward;
       await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
       setUser(prev => ({ ...prev, balance: newBalance }));
-      alert(`Earned ${reward} TON! ✅`);
+      alert(`Ad complete! Reward: +${reward} TON ✅`);
       fetchAllData();
     });
   };
@@ -189,16 +196,14 @@ function App() {
     });
   };
 
-  // --- UPDATED START TASK HANDLER (LINK + AD MANDATORY) ---
   const handleStartTask = (task) => {
     if (user.completed_tasks?.includes(task.id)) return;
     
-    // 1. Open the Task target link
-    window.open(task.link, '_blank');
-    
-    // 2. Immediately trigger 20s Ad requirement
+    // 1. First trigger the Ad (Required)
     triggerAd(20, async () => { 
-        // Logic executes only after 20s ad timer hits zero
+        // 2. Open the Task target link AFTER ad timer ends
+        window.open(task.link, '_blank');
+
         const updatedTasks = [...(user.completed_tasks || []), task.id];
         const taskReward = 0.001; 
         const newBalance = user.balance + taskReward;
@@ -234,6 +239,7 @@ function App() {
     });
   };
 
+  // --- Keep original handlers for Admin ---
   const handleCheckUser = async () => {
     if (!targetId) return;
     const { data: userData } = await supabase.from('users').select('*').eq('id', targetId).single();
@@ -449,6 +455,7 @@ function App() {
         )}
       </div>
 
+      {/* Footer Navigation */}
       <div style={styles.bottomNav}>
         <div onClick={()=>triggerAd(20, () => setMainTab('earn'))} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
         <div onClick={()=>triggerAd(20, () => setMainTab('invite'))} style={styles.navItem(mainTab==='invite')}>👥<br/>INVITE</div>
