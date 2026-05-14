@@ -51,7 +51,7 @@ function App() {
   const [adminPromoCode, setAdminPromoCode] = useState('');
   const [adminPromoValue, setAdminPromoValue] = useState('');
 
-  // --- NEW ENFORCED AD STATES ---
+  // --- ENFORCED AD STATES ---
   const [isAdWatching, setIsAdWatching] = useState(false);
   const [adTimer, setAdTimer] = useState(0);
   const [pendingAction, setPendingAction] = useState(null);
@@ -84,7 +84,6 @@ function App() {
                 await supabase.from('users').update({ balance: inviter.balance + 0.005 }).eq('id', startParam);
             }
         }
-
         const { data: newUser } = await supabase.from('users').insert([{ 
             id: user.id, balance: 0, invited_by: startParam, completed_tasks: [], last_spin: 0 
         }]).select().single();
@@ -117,7 +116,7 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- NEW AD ENGINE (STRICT ENFORCEMENT) ---
+  // --- AD ENGINE (BACKGROUND ENFORCEMENT) ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) {
       callback();
@@ -129,14 +128,6 @@ function App() {
     setAdTimer(duration);
     setPendingAction(() => callback);
     window.open(randomAd, '_blank');
-  };
-
-  // Warning when trying to skip the overlay
-  const handleOverlayWarning = () => {
-    if (isAdWatching && adTimer > 0) {
-      alert("Watch the full time‼️");
-      window.open(currentAdUrl.current, '_blank');
-    }
   };
 
   useEffect(() => {
@@ -153,12 +144,24 @@ function App() {
     return () => clearInterval(timer);
   }, [isAdWatching, adTimer, pendingAction]);
 
-  const changeTab = (tab) => triggerAd(15, () => setMainTab(tab));
-  const changeSubTab = (tab) => triggerAd(15, () => setSubTab(tab));
+  // Enforcement: When user switches back to the app, check timer
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isAdWatching && adTimer > 0) {
+        alert("Watch the full time‼️");
+        window.open(currentAdUrl.current, '_blank');
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [isAdWatching, adTimer]);
+
+  const changeTab = (tab) => triggerAd(10, () => setMainTab(tab));
+  const changeSubTab = (tab) => triggerAd(10, () => setSubTab(tab));
 
   const handleWatchAds = () => {
     triggerAd(30, async () => {
-      const reward = 0.001; 
+      const reward = user.is_vip ? 0.0008 : 0.0003; 
       const newBalance = user.balance + reward;
       await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
       setUser(prev => ({ ...prev, balance: newBalance }));
@@ -175,9 +178,8 @@ function App() {
         setIsSpinning(true);
         const randomIndex = Math.floor(Math.random() * spinOptions.length);
         const segmentAngle = 360 / spinOptions.length;
-        const extraSpins = 3600; 
         const currentRotationBase = spinRotation - (spinRotation % 360);
-        const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle));
+        const finalRotation = currentRotationBase + 3600 + (360 - (randomIndex * segmentAngle));
         setSpinRotation(finalRotation);
 
         setTimeout(async () => {
@@ -212,14 +214,13 @@ function App() {
     });
   };
 
-  // Updated Task Flow: Open Link -> Trigger Ad -> Reward
   const handleStartTask = async (task) => {
-    if (user.id !== ADMIN_ID && user.completed_tasks?.includes(task.id)) return alert("Task already completed!");
+    if (user.id !== ADMIN_ID && user.completed_tasks?.includes(task.id)) return;
     
-    // First: Reach the link
+    // Step 1: Open task link
     window.open(task.link, '_blank');
 
-    // Second: Trigger Ad timer. Reward only added AFTER timer finishes.
+    // Step 2: Trigger Ads (20s) and reward only after completion
     triggerAd(20, async () => {
         const updatedTasks = [...(user.completed_tasks || []), task.id];
         const newBalance = user.balance + 0.001;
@@ -286,28 +287,18 @@ function App() {
     wheelWrapper: { position: 'relative', width: 220, height: 220, margin: '20px auto' },
     wheelArrow: { position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
     wheel: { width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${spinOptions.map((o, i) => `${o.color} ${i * (360/spinOptions.length)}deg ${(i+1) * (360/spinOptions.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${spinRotation}deg)` },
-    watchText: { textAlign: 'center', marginBottom: 10, fontWeight: 'bold', fontSize: 13 },
-    adOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.98)', zIndex: 9999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#fff', textAlign: 'center', padding: 20, cursor: 'not-allowed' }
+    watchInfo: { display: 'flex', justifyContent: 'center', gap: '15px', marginBottom: 10, fontWeight: 'bold', fontSize: 13 },
+    bgTimer: { position: 'fixed', top: 10, right: 10, background: 'rgba(0,0,0,0.8)', color: '#fff', padding: '5px 12px', borderRadius: '20px', fontSize: '12px', zIndex: 10000, border: '1px solid #facc15' }
   };
 
   if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>LOADING...</div>;
 
   return (
     <div style={styles.container}>
-      {/* AD OVERLAY ENFORCEMENT */}
+      {/* BACKGROUND AD TIMER UI */}
       {isAdWatching && (
-        <div style={styles.adOverlay} onClick={handleOverlayWarning}>
-          <h2 style={{color: '#facc15'}}>ADVERTISING LOADING</h2>
-          <p>Please watch the advertisement until the end...</p>
-          <div style={{position: 'relative', margin: '25px 0'}}>
-            <svg width="120" height="120">
-                <circle cx="60" cy="60" r="50" fill="none" stroke="#333" strokeWidth="8" />
-                <circle cx="60" cy="60" r="50" fill="none" stroke="#facc15" strokeWidth="8" strokeDasharray="314" strokeDashoffset={314 - (314 * (adTimer / 30))} style={{transition: 'stroke-dashoffset 1s linear'}} />
-            </svg>
-            <div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: 28, fontWeight: 'bold'}}>{adTimer}</div>
-          </div>
-          <p style={{fontSize: 13, color: '#ff4b2b', fontWeight: 'bold'}}>WARNING: DO NOT CLOSE THE ADS PAGE!</p>
-          <button onClick={(e) => { e.stopPropagation(); window.open(currentAdUrl.current, '_blank'); }} style={{...styles.btn, background: '#facc15', color: '#000', marginTop: 25, width: '80%'}}>RETURN TO ADVERTISEMENT</button>
+        <div style={styles.bgTimer}>
+           ⏳ Ad: {adTimer}s
         </div>
       )}
 
@@ -318,8 +309,10 @@ function App() {
          {user.is_vip && <span style={{color:'#facc15', fontSize:12, fontWeight:'bold'}}>⭐ VIP MEMBER</span>}
       </div>
 
-      <div style={styles.watchText}>
-        Reward per Ad: <span style={{ color: '#28a745' }}>0.001 TON</span>
+      {/* Reward Info Bar */}
+      <div style={styles.watchInfo}>
+        <span style={{ color: !user.is_vip ? '#28a745' : '#888' }}>Normal: 0.0003</span>
+        <span style={{ color: user.is_vip ? '#28a745' : '#888' }}>VIP: 0.0008</span>
       </div>
 
       <button onClick={handleWatchAds} style={{...styles.btn, width:'100%', background:'linear-gradient(to right, #ff416c, #ff4b2b)', marginBottom:15, height:50, fontSize:16, border:'2px solid #000'}}>
@@ -383,21 +376,13 @@ function App() {
                 </div>
               )}
               <hr/>
-              <h4>Tasks (Admin View - All Visible)</h4>
+              <h4>Tasks (Admin)</h4>
               {tasks.map(t => (
                 <div key={t.id} style={{display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #eee'}}>
                    <span style={{fontSize:12}}>{t.name} ({t.type})</span>
                    <button onClick={async () => { if(window.confirm("Delete?")){ await supabase.from('global_tasks').delete().eq('id', t.id); fetchAllData(); } }} style={{background:'red', color:'#fff', border:'none', borderRadius:5, fontSize:10, padding:'2px 8px'}}>DELETE</button>
                 </div>
               ))}
-              <hr/>
-              <h4>Create Reward Code</h4>
-              <input style={styles.input} placeholder="Code Name" value={adminPromoCode} onChange={e=>setAdminPromoCode(e.target.value)} />
-              <input style={styles.input} placeholder="TON Value" type="number" value={adminPromoValue} onChange={e=>setAdminPromoValue(e.target.value)} />
-              <button style={{...styles.btn, width:'100%', background:'#ff9900'}} onClick={async ()=>{
-                await supabase.from('promo_codes').insert([{code:adminPromoCode, value:Number(adminPromoValue), used_by:[]}]);
-                alert("Promo Code Created!");
-              }}>CREATE PROMO</button>
               <hr/>
               <h4>Add Task</h4>
               <input style={styles.input} placeholder="Name" value={taskName} onChange={e=>setTaskName(e.target.value)} />
@@ -411,11 +396,13 @@ function App() {
               }}>ADD TASK</button>
             </div>
           ) : (
-            // TASK FILTERING: Only show if NOT completed OR if user is ADMIN
-            tasks.filter(t => t.type === subTab && (user.id === ADMIN_ID || !user.completed_tasks?.includes(t.id))).map(t => (
+            // TASK FILTERING: Only show if NOT completed
+            tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(t.id)).map(t => (
               <div key={t.id} style={styles.card}>
-                <span style={{fontWeight:'bold'}}>{t.name}</span>
-                <button onClick={()=>handleStartTask(t)} style={{...styles.btn, float:'right', padding:'8px 15px'}}>START</button>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                    <span style={{fontWeight:'bold'}}>{t.name}</span>
+                    <button onClick={()=>handleStartTask(t)} style={{...styles.btn, padding:'8px 15px'}}>START</button>
+                </div>
               </div>
             ))
           )
