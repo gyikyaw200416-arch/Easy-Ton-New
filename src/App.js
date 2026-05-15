@@ -23,7 +23,8 @@ function App() {
     balance: 0, 
     is_vip: false, 
     completed_tasks: [], 
-    last_spin: 0 
+    last_spin: 0,
+    spin_allowance: 0
   });
   
   const [tasks, setTasks] = useState([]);
@@ -47,6 +48,7 @@ function App() {
   const [userWithdraws, setUserWithdraws] = useState([]);
   const [editBal, setEditBal] = useState('');
   const [editVip, setEditVip] = useState(false);
+  const [editSpinAllow, setEditSpinAllow] = useState(0);
   const [taskName, setTaskName] = useState('');
   const [taskLink, setTaskLink] = useState('');
   const [taskType, setTaskType] = useState('bot');
@@ -100,7 +102,7 @@ function App() {
             }
         }
         const { data: newUser } = await supabase.from('users').insert([{ 
-            id: user.id, balance: 0, invited_by: startParam, completed_tasks: [], last_spin: 0 
+            id: user.id, balance: 0, invited_by: startParam, completed_tasks: [], last_spin: 0, spin_allowance: 0 
         }]).select().single();
         uData = newUser;
     }
@@ -136,7 +138,6 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- AD LOGIC ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     const selectedAd = AD_LINKS[adToggle.current % 2];
@@ -182,31 +183,55 @@ function App() {
     });
   };
 
-  const handleSpin = async (type = 'normal') => {
-    if (user.id !== ADMIN_ID && timeLeft > 0) return alert("Cooldown active! Please wait.");
-    if (isSpinning) return;
-    const options = type === 'vip' ? vipSpinOptions : spinOptions;
-    triggerAd(20, async () => {
-        setIsSpinning(true);
-        const randomIndex = Math.floor(Math.random() * options.length);
-        const segmentAngle = 360 / options.length;
-        const extraSpins = 3600; 
-        const currentRot = type === 'vip' ? vipSpinRotation : spinRotation;
-        const currentRotationBase = currentRot - (currentRot % 360);
-        const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle));
-        if(type === 'vip') setVipSpinRotation(finalRotation);
-        else setSpinRotation(finalRotation);
-        setTimeout(async () => {
-          const winner = options[randomIndex];
-          const newBalance = user.balance + winner.amt;
-          const now = Date.now();
-          await supabase.from('users').update({ balance: newBalance, last_spin: now }).eq('id', user.id);
-          setUser(prev => ({ ...prev, balance: newBalance, last_spin: now }));
-          alert(`Landed on ${winner.label}! +${winner.amt} TON ✅`);
-          setIsSpinning(false);
-          fetchAllData();
-        }, 4000);
+  // Improved Spin Logic: Trigger Ad FIRST, then Require button click to start animation
+  const [canStartSpin, setCanStartSpin] = useState(false);
+  const [activeSpinType, setActiveSpinType] = useState(null);
+
+  const prepareSpin = (type = 'normal') => {
+    if (user.id !== ADMIN_ID && timeLeft > 0 && type === 'normal') return alert("Cooldown active! Please wait.");
+    if (type === 'vip' && user.spin_allowance <= 0) return alert("No VIP Spins available. Please deposit or contact Admin.");
+    
+    triggerAd(20, () => {
+      setCanStartSpin(true);
+      setActiveSpinType(type);
+      alert("Ad complete! Now click the SPIN button to start the wheel! 🎡");
     });
+  };
+
+  const runSpin = async () => {
+    if (isSpinning || !canStartSpin) return;
+    setIsSpinning(true);
+    setCanStartSpin(false);
+
+    const type = activeSpinType;
+    const options = type === 'vip' ? vipSpinOptions : spinOptions;
+    
+    const randomIndex = Math.floor(Math.random() * options.length);
+    const segmentAngle = 360 / options.length;
+    const extraSpins = 3600; 
+    const currentRot = type === 'vip' ? vipSpinRotation : spinRotation;
+    const currentRotationBase = currentRot - (currentRot % 360);
+    const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle));
+    
+    if(type === 'vip') setVipSpinRotation(finalRotation);
+    else setSpinRotation(finalRotation);
+
+    setTimeout(async () => {
+      const winner = options[randomIndex];
+      let updateData = { balance: user.balance + winner.amt };
+      
+      if (type === 'vip') {
+        updateData.spin_allowance = user.spin_allowance - 1;
+      } else {
+        updateData.last_spin = Date.now();
+      }
+
+      await supabase.from('users').update(updateData).eq('id', user.id);
+      alert(`Landed on ${winner.label}! +${winner.amt} TON ✅`);
+      setIsSpinning(false);
+      setActiveSpinType(null);
+      fetchAllData();
+    }, 4000);
   };
 
   const handleStartTask = (task) => {
@@ -247,14 +272,21 @@ function App() {
     if (!targetId) return;
     const { data: userData } = await supabase.from('users').select('*').eq('id', targetId).single();
     if (userData) { 
-        setSearchedUser(userData); setEditBal(userData.balance); setEditVip(userData.is_vip);
+        setSearchedUser(userData); 
+        setEditBal(userData.balance); 
+        setEditVip(userData.is_vip);
+        setEditSpinAllow(userData.spin_allowance || 0);
         const { data: wData } = await supabase.from('withdrawals').select('*').eq('user_id', targetId).eq('status', 'Pending');
         setUserWithdraws(wData || []);
     } else { alert("User Not Found!"); }
   };
 
   const handleUpdateUser = async () => {
-    const updatedFields = { balance: Number(editBal), is_vip: editVip };
+    const updatedFields = { 
+      balance: Number(editBal), 
+      is_vip: editVip,
+      spin_allowance: Number(editSpinAllow)
+    };
     const { error } = await supabase.from('users').update(updatedFields).eq('id', targetId);
     if (!error) { alert("User Data Updated! ✅"); handleCheckUser(); fetchAllData(); }
   };
@@ -274,7 +306,7 @@ function App() {
     navItem: (active) => ({ color: active ? '#facc15' : '#fff', textAlign: 'center', fontSize: '11px', fontWeight: 'bold', flex: 1, cursor: 'pointer' }),
     copyBtn: { background: '#eee', border: '1px solid #000', fontSize: '10px', padding: '4px 8px', marginLeft: '5px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' },
     wheelWrapper: { position: 'relative', width: 220, height: 220, margin: '20px auto' },
-    wheelArrow: { position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
+    wheelArrow: { position: 'absolute', top: -25, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
     wheel: (rotation, options) => ({ width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${options.map((o, i) => `${o.color} ${i * (360/options.length)}deg ${(i+1) * (360/options.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${rotation}deg)` }),
     dot: (color) => ({ height: 10, width: 10, backgroundColor: color, borderRadius: '50%', display: 'inline-block', marginRight: 5, border: '1px solid #000' }),
     depositBox: { background: '#f8f9fa', padding: '10px', borderRadius: '10px', border: '1px solid #ddd', marginTop: '15px', textAlign: 'left', fontSize: '12px' }
@@ -289,11 +321,6 @@ function App() {
          <small style={{opacity:0.7}}>MY TOTAL BALANCE</small>
          <h1 style={{margin:'5px 0', fontSize:32}}>{user.balance.toFixed(5)} TON</h1>
          {user.is_vip && <span style={{color:'#facc15', fontSize:12, fontWeight:'bold'}}>⭐ VIP MEMBER</span>}
-      </div>
-
-      <div style={{display:'flex', justifyContent:'center', gap:20, marginBottom:10, fontSize:12, fontWeight:'bold'}}>
-         <span style={{color: !user.is_vip ? '#34C759' : '#000'}}>Standard: 0.0003 TON</span>
-         <span style={{color: user.is_vip ? '#34C759' : '#000'}}>VIP: 0.0008 TON</span>
       </div>
 
       <button onClick={handleWatchAds} style={{...styles.btn, width:'100%', background:'linear-gradient(to right, #ff416c, #ff4b2b)', marginBottom:15, height:50, fontSize:16, border:'2px solid #000'}}>
@@ -315,35 +342,48 @@ function App() {
         {mainTab === 'earn' && (
           subTab === 'spin' ? (
               <>
-                {/* FIRST SPIN - LUCKY SPIN */}
                 <div style={{...styles.card, textAlign:'center'}}>
                   <h3 style={{marginTop:0}}>🎡 LUCKY SPIN</h3>
                   <div style={styles.wheelWrapper}>
                     <div style={styles.wheelArrow}></div>
                     <div style={styles.wheel(spinRotation, spinOptions)}></div>
                   </div>
-                  <button onClick={() => handleSpin('normal')} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#00d2ff'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
-                    {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'SPIN NOW (20s AD)'}
-                  </button>
+                  
+                  {!canStartSpin || activeSpinType !== 'normal' ? (
+                    <button onClick={() => prepareSpin('normal')} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#00d2ff'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
+                      {(user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'PREPARE SPIN (20s AD)'}
+                    </button>
+                  ) : (
+                    <button onClick={runSpin} style={{...styles.btn, width:'100%', background: '#34C759'}} disabled={isSpinning}>
+                      {isSpinning ? 'SPINNING...' : 'CLICK TO SPIN NOW! 🎡'}
+                    </button>
+                  )}
+
                   <div style={{display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:5, marginTop:20, fontSize:10, textAlign:'left'}}>
                     {spinOptions.map((o,i) => <div key={i}><span style={styles.dot(o.color)}></span>{o.amt} TON</div>)}
                   </div>
                 </div>
 
-                {/* SECOND SPIN - VIP LUCKY SPIN */}
                 <div style={{...styles.card, textAlign:'center', marginTop:20}}>
                   <h3 style={{marginTop:0}}>🎡 VIP LUCKY SPIN</h3>
+                  <p style={{fontSize:12, fontWeight:'bold', color:'blue'}}>Available VIP Spins: {user.spin_allowance || 0}</p>
                   <div style={styles.wheelWrapper}>
                     <div style={styles.wheelArrow}></div>
                     <div style={styles.wheel(vipSpinRotation, vipSpinOptions)}></div>
                   </div>
-                  <button onClick={() => handleSpin('vip')} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#facc15', color: '#000'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
-                    {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : '0.1 TON SPIN'}
-                  </button>
 
-                  {/* Deposit Info for VIP Spin */}
+                  {!canStartSpin || activeSpinType !== 'vip' ? (
+                    <button onClick={() => prepareSpin('vip')} style={{...styles.btn, width:'100%', background: user.spin_allowance > 0 ? '#facc15' : '#ccc', color: '#000'}} disabled={isSpinning || user.spin_allowance <= 0}>
+                      {user.spin_allowance > 0 ? 'PREPARE VIP SPIN (20s AD)' : 'NO VIP SPINS LEFT'}
+                    </button>
+                  ) : (
+                    <button onClick={runSpin} style={{...styles.btn, width:'100%', background: '#34C759'}} disabled={isSpinning}>
+                      {isSpinning ? 'SPINNING...' : 'START VIP SPIN! 🎡'}
+                    </button>
+                  )}
+
                   <div style={styles.depositBox}>
-                    <p style={{margin:'0 0 5px 0', fontWeight:'bold', color:'#d97706'}}>To play VIP Spin, Deposit 0.1 TON:</p>
+                    <p style={{margin:'0 0 5px 0', fontWeight:'bold', color:'#d97706'}}>Deposit 0.1 TON to get 1 VIP Spin:</p>
                     <div style={{marginBottom: 5}}>
                       Address: <code style={{fontSize:'10px'}}>{DEPOSIT_ADDRESS}</code>
                       <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(DEPOSIT_ADDRESS); alert("Address Copied!");}}>COPY</span>
@@ -366,29 +406,39 @@ function App() {
               <h3 style={{marginTop:0}}>Admin Panel</h3>
               <input style={styles.input} placeholder="Search User UID" value={targetId} onChange={e=>setTargetId(e.target.value)} />
               <button style={{...styles.btn, width:'100%', marginBottom:10}} onClick={handleCheckUser}>CHECK USER</button>
+              
               {searchedUser && (
                 <div style={{background:'#f0f9ff', padding:15, borderRadius:10, border:'1px solid #000', marginBottom:10}}>
-                  <p>UID: {searchedUser.id}</p>
+                  <p><b>User UID:</b> {searchedUser.id}</p>
+                  
+                  <label style={{fontSize:12}}>Balance (TON):</label>
                   <input style={styles.input} type="number" value={editBal} onChange={e=>setEditBal(e.target.value)} />
+                  
+                  <label style={{fontSize:12}}>VIP Spin Allowance (Turns):</label>
+                  <input style={styles.input} type="number" value={editSpinAllow} onChange={e=>setEditSpinAllow(e.target.value)} />
+                  
+                  <label style={{fontSize:12}}>Membership Status:</label>
                   <select style={styles.input} value={editVip} onChange={e=>setEditVip(e.target.value === 'true')}>
                     <option value="false">Standard Account</option>
                     <option value="true">VIP Account ⭐</option>
                   </select>
-                  <button style={{...styles.btn, width:'100%', background:'green', marginBottom:15}} onClick={handleUpdateUser}>UPDATE DATA</button>
+                  
+                  <button style={{...styles.btn, width:'100%', background:'green', marginBottom:15}} onClick={handleUpdateUser}>UPDATE USER DATA</button>
+                  
                   {userWithdraws.map(w => (
-                    <div key={w.id} style={{fontSize:11, marginBottom:10}}>
-                        {w.amount} TON to {w.address.slice(0,10)}...
+                    <div key={w.id} style={{fontSize:11, marginBottom:10, padding: 5, background: '#fff', border: '1px solid #ddd'}}>
+                        Withdraw: {w.amount} TON to {w.address.slice(0,10)}...
                         <button onClick={() => approveWithdraw(w.id)} style={{float:'right', background:'blue', color:'#fff', borderRadius:5, border:'none', padding:'3px 8px'}}>Approve</button>
                     </div>
                   ))}
                 </div>
               )}
               <hr/>
-              <h4>Manage Tasks</h4>
+              <h4>Manage Global Tasks</h4>
               {tasks.map(t => (
                 <div key={t.id} style={{display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #eee'}}>
                    <span style={{fontSize:12}}>{t.name} ({t.type})</span>
-                   <button onClick={async () => { if(window.confirm("Are you sure you want to delete this task?")){ await supabase.from('global_tasks').delete().eq('id', t.id); fetchAllData(); } }} style={{background:'red', color:'#fff', border:'none', borderRadius:5, fontSize:10, padding:'3px 8px'}}>DELETE</button>
+                   <button onClick={async () => { if(window.confirm("Delete this task?")){ await supabase.from('global_tasks').delete().eq('id', t.id); fetchAllData(); } }} style={{background:'red', color:'#fff', border:'none', borderRadius:5, fontSize:10, padding:'3px 8px'}}>DELETE</button>
                 </div>
               ))}
               <input style={styles.input} placeholder="Task Name" value={taskName} onChange={e=>setTaskName(e.target.value)} />
@@ -398,8 +448,8 @@ function App() {
               </select>
               <button style={{...styles.btn, width:'100%'}} onClick={async ()=>{
                 await supabase.from('global_tasks').insert([{name:taskName, link:taskLink, type:taskType}]);
-                alert("Task Added Successfully!"); fetchAllData();
-              }}>ADD TASK</button>
+                alert("Task Added!"); fetchAllData();
+              }}>ADD NEW TASK</button>
             </div>
           ) : (
             tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(String(t.id))).map(t => (
@@ -482,6 +532,7 @@ function App() {
             <div style={{textAlign:'left', marginBottom:20, background: '#f9f9f9', padding: 15, borderRadius: 10}}>
                 <p><b>Account ID:</b> {user.id}</p>
                 <p><b>Current Balance:</b> {user.balance.toFixed(5)} TON</p>
+                <p><b>VIP Spins:</b> {user.spin_allowance || 0}</p>
                 <p><b>Member Status:</b> {user.is_vip ? "VIP Member ⭐" : "Standard User"}</p>
             </div>
             <button onClick={()=>window.open("https://t.me/EasyTonHelp_Bot")} style={{...styles.btn, width:'100%', background:'#0088cc'}}>CONTACT SUPPORT</button>
