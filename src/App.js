@@ -15,6 +15,13 @@ const AD_LINKS = [
   "https://www.profitablecpmratenetwork.com/pmi0yt9u?key=3580805003ccb6983acba9b61b6cb7e2"
 ];
 
+// --- RANK REWARDS LIST (1 to 30) ---
+const RANK_REWARDS = [
+  30, 28, 25, 20, 20, 15, 15, 10, 10, 10, 
+  5, 5, 5, 3, 3, 3, 3, 2, 2, 2, 
+  2, 2, 1, 1, 1, 1, 1, 1, 1, 1
+];
+
 function App() {
   const [mainTab, setMainTab] = useState('earn');
   const [subTab, setSubTab] = useState('bot');
@@ -115,7 +122,7 @@ function App() {
     const { data: tData } = await supabase.from('global_tasks').select('*');
     if (tData) setTasks(tData);
 
-    const { data: rData } = await supabase.from('users').select('id, balance').order('balance', { ascending: false }).limit(50);
+    const { data: rData } = await supabase.from('users').select('id, balance').order('balance', { ascending: false }).limit(30);
     if (rData) setRankList(rData);
 
     const { data: wData } = await supabase.from('withdrawals').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
@@ -189,7 +196,6 @@ function App() {
     });
   };
 
-  // --- REWARD LOGIC FIX ---
   const startSpinExecution = async () => {
     if (!readyToSpin || isSpinning) return;
     const type = readyToSpin;
@@ -197,17 +203,14 @@ function App() {
     setReadyToSpin(null);
 
     const options = type === 'vip' ? vipSpinOptions : spinOptions;
-    
-    // Generate a random rotation
     const randomExtraDegrees = Math.floor(Math.random() * 360);
-    const totalSpins = 3600; // 10 full rotations
+    const totalSpins = 3600; 
     const newRotation = (type === 'vip' ? vipSpinRotation : spinRotation) + totalSpins + randomExtraDegrees;
     
     if(type === 'vip') setVipSpinRotation(newRotation);
     else setSpinRotation(newRotation);
 
     setTimeout(async () => {
-      // Calculate winner based on the degree pointing at the top (12 o'clock)
       const actualDegree = (360 - (newRotation % 360)) % 360;
       const segmentSize = 360 / options.length;
       const winningIndex = Math.floor(actualDegree / segmentSize);
@@ -302,28 +305,11 @@ function App() {
     navItem: (active) => ({ color: active ? '#facc15' : '#fff', textAlign: 'center', fontSize: '11px', fontWeight: 'bold', flex: 1, cursor: 'pointer' }),
     copyBtn: { background: '#eee', border: '1px solid #000', fontSize: '10px', padding: '4px 8px', marginLeft: '5px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' },
     wheelWrapper: { position: 'relative', width: 220, height: 220, margin: '20px auto' },
-    wheelArrow: { 
-        position: 'absolute', 
-        top: '-15px', 
-        left: '50%',  
-        transform: 'translateX(-50%)', 
-        width: 0, height: 0, 
-        borderLeft: '15px solid transparent', 
-        borderRight: '15px solid transparent', 
-        borderTop: '30px solid #000', 
-        zIndex: 10 
-    },
-    wheel: (rotation, options) => ({ 
-        width: '100%', 
-        height: '100%', 
-        borderRadius: '50%', 
-        border: '5px solid #000', 
-        background: `conic-gradient(${options.map((o, i) => `${o.color} ${i * (360/options.length)}deg ${(i+1) * (360/options.length)}deg`).join(', ')})`, 
-        transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', 
-        transform: `rotate(${rotation}deg)` 
-    }),
+    wheelArrow: { position: 'absolute', top: '-15px', left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
+    wheel: (rotation, options) => ({ width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${options.map((o, i) => `${o.color} ${i * (360/options.length)}deg ${(i+1) * (360/options.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${rotation}deg)` }),
     dot: (color) => ({ height: 10, width: 10, backgroundColor: color, borderRadius: '50%', display: 'inline-block', marginRight: 5, border: '1px solid #000' }),
-    depositBox: { background: '#f8f9fa', padding: '10px', borderRadius: '10px', border: '1px solid #ddd', marginTop: '15px', textAlign: 'left', fontSize: '12px' }
+    depositBox: { background: '#f8f9fa', padding: '10px', borderRadius: '10px', border: '1px solid #ddd', marginTop: '15px', textAlign: 'left', fontSize: '12px' },
+    rankHeader: { textAlign: 'center', marginBottom: '20px', background: 'linear-gradient(45deg, #FFD700, #FFA500)', padding: '10px', borderRadius: '15px', border: '2px solid #000', color: '#000', fontWeight: '900' }
   };
 
   if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>LOADING...</div>;
@@ -385,7 +371,6 @@ function App() {
 
                 <div style={{...styles.card, textAlign:'center', marginTop:20}}>
                   <h3 style={{marginTop:0, color:'#b8860b'}}>🎡 VIP LUCKY SPIN</h3>
-                  {/* Changed text below as requested */}
                   <p style={{fontSize: 11, color: '#666'}}>Cost per Spin: <b>0.1 TON Spin</b></p>
                   <div style={styles.wheelWrapper}>
                     <div style={styles.wheelArrow}></div>
@@ -402,7 +387,6 @@ function App() {
                     </button>
                   )}
 
-                  {/* Added Deposit Section below the Insufficient/Spin button */}
                   <div style={{ ...styles.depositBox, background: '#fff9c4', border: '1px dashed #000' }}>
                     <h4 style={{ margin: '0 0 5px 0' }}>📥 Deposit</h4>
                     <p style={{ fontSize: '10px', margin: '2px 0' }}><b>Address:</b> {DEPOSIT_ADDRESS} 
@@ -493,20 +477,50 @@ function App() {
           </div>
         )}
 
+        {/* --- UPDATED RANK SECTION --- */}
         {mainTab === 'rank' && (
           <div style={styles.card}>
-            <h3 style={{textAlign:'center', marginTop:0}}>🏆 TOP 50</h3>
+            <div style={styles.rankHeader}>
+              🏆 TOP 30 LEADERS 🏆
+            </div>
             <table style={{width:'100%', fontSize:12, borderCollapse:'collapse'}}>
-              <thead><tr style={{borderBottom:'2px solid #000'}}><th align="left">User ID</th><th align="right">Balance</th></tr></thead>
+              <thead>
+                <tr style={{borderBottom:'2px solid #000', color: '#555'}}>
+                  <th align="left" style={{paddingBottom: '10px'}}>RANKING</th>
+                  <th align="left">USER ID</th>
+                  <th align="right">REWARD</th>
+                </tr>
+              </thead>
               <tbody>
-                {rankList.map((r, i) => (
-                  <tr key={i} style={{borderBottom:'1px solid #eee', background: r.id === user.id ? '#fff9c4' : 'none'}}>
-                    <td style={{padding:'10px 0'}}>{i+1}. {r.id}</td>
-                    <td align="right" style={{color:'blue', fontWeight:'bold'}}>{r.balance.toFixed(4)} TON</td>
+                {rankList.slice(0, 30).map((r, i) => (
+                  <tr key={i} style={{
+                    borderBottom:'1px solid #eee', 
+                    background: r.id === user.id ? '#fff9c4' : 'none',
+                    height: '40px'
+                  }}>
+                    <td style={{fontWeight: 'bold'}}>
+                      {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '🏆'} {i + 1}
+                    </td>
+                    <td style={{fontFamily: 'monospace'}}>{r.id}</td>
+                    <td align="right">
+                      <span style={{
+                        background: '#000', 
+                        color: '#facc15', 
+                        padding: '3px 8px', 
+                        borderRadius: '8px', 
+                        fontSize: '10px',
+                        fontWeight: 'bold'
+                      }}>
+                        {RANK_REWARDS[i] || 0} TON
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            <p style={{fontSize: '9px', textAlign: 'center', marginTop: '15px', color: '#888'}}>
+              * Rewards are distributed based on your final position.
+            </p>
           </div>
         )}
 
