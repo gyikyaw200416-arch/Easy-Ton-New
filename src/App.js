@@ -37,7 +37,7 @@ function App() {
   
   // Spin States
   const [isSpinning, setIsSpinning] = useState(false);
-  const [readyToSpin, setReadyToSpin] = useState(null); // 'normal' or 'vip'
+  const [readyToSpin, setReadyToSpin] = useState(null); 
   const [spinRotation, setSpinRotation] = useState(0); 
   const [vipSpinRotation, setVipSpinRotation] = useState(0); 
   const [timeLeft, setTimeLeft] = useState(0);
@@ -204,7 +204,10 @@ function App() {
     const extraSpins = 3600; 
     const currentRot = type === 'vip' ? vipSpinRotation : spinRotation;
     const currentRotationBase = currentRot - (currentRot % 360);
-    const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle));
+    
+    // Logic Adjusted for Arrow at ~2 o'clock position (60 degrees offset)
+    const arrowOffset = 60; 
+    const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle) + arrowOffset);
     
     if(type === 'vip') setVipSpinRotation(finalRotation);
     else setSpinRotation(finalRotation);
@@ -220,7 +223,6 @@ function App() {
         updateData.last_spin = now;
       }
       if (type === 'vip') {
-        // Deduct 0.1 TON and add the won amount
         newBalance = (user.balance - 0.1) + winner.amt;
         updateData.balance = newBalance;
       }
@@ -304,8 +306,8 @@ function App() {
     wheelArrow: { 
         position: 'absolute', 
         top: '15%', 
-        right: '-10%', 
-        transform: 'translateY(-50%) rotate(120deg)', 
+        right: '-12%', // Shifted to the right as per reference
+        transform: 'translateY(-50%) rotate(120deg)', // Points toward center from top-right
         width: 0, height: 0, 
         borderLeft: '15px solid transparent', 
         borderRight: '15px solid transparent', 
