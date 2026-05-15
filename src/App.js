@@ -71,8 +71,7 @@ function App() {
     { amt: 0.001, color: '#FFFFFF', label: 'White' }     
   ];
 
-  const fetchAllData = useCallback(async (isSilent = false) => {
-    if (!isSilent) setLoading(true);
+  const fetchAllData = useCallback(async () => {
     let { data: uData } = await supabase.from('users').select('*').eq('id', user.id).single();
     
     if (!uData) {
@@ -115,8 +114,10 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- AD ENGINE LOGIC ---
+  // --- AD LOGIC ---
   const triggerAd = (duration, callback) => {
+    if (user.id === ADMIN_ID) return callback(); 
+    
     const selectedAd = AD_LINKS[adToggle.current % 2];
     adToggle.current += 1;
 
@@ -163,7 +164,7 @@ function App() {
       await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
       setUser(prev => ({ ...prev, balance: newBalance }));
       alert(`Ad complete! Reward: +${reward} TON ✅`);
-      fetchAllData(true);
+      fetchAllData();
     });
   };
 
@@ -188,25 +189,26 @@ function App() {
           setUser(prev => ({ ...prev, balance: newBalance, last_spin: now }));
           alert(`Landed on ${winner.label}! +${winner.amt} TON ✅`);
           setIsSpinning(false);
-          fetchAllData(true);
+          fetchAllData();
         }, 4000);
     });
   };
 
-  // --- TASK LOGIC (HIDE ONLY AFTER COMPLETE & ADD BALANCE) ---
   const handleStartTask = (task) => {
     if (user.completed_tasks?.includes(task.id)) return;
     
-    // Logic: Start Ad Timer AND Open Task Link simultaneously
+    // Logic: Opens Link and Ad simultaneously
     window.open(task.link, '_blank');
-    
+
     triggerAd(20, async () => { 
         const currentTasks = user.completed_tasks || [];
+        if (currentTasks.includes(task.id)) return; 
+
         const updatedCompletedTasks = [...currentTasks, task.id];
         const taskReward = 0.001; 
         const newBalance = user.balance + taskReward;
         
-        // 1. Update Database
+        // Database Update
         const { error } = await supabase
           .from('users')
           .update({ 
@@ -216,7 +218,7 @@ function App() {
           .eq('id', user.id);
         
         if(!error) {
-          // 2. Only after DB success: Update Local State so Task disappears from screen
+          // Update local state and hide from UI
           setUser(prev => ({ 
             ...prev, 
             balance: newBalance, 
@@ -224,10 +226,12 @@ function App() {
           }));
           
           alert(`Task Verified! +${taskReward} TON Added ✅`); 
-          // 3. Refresh list to ensure it's gone
-          fetchAllData(true);
+          
+          // Data Refresh
+          setTimeout(() => fetchAllData(), 500);
         } else {
           alert("Error verifying task. Please try again.");
+          console.error(error);
         }
     });
   };
@@ -246,7 +250,7 @@ function App() {
         await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
         setUser(prev => ({ ...prev, balance: newBalance }));
         alert("Withdrawal Request Pending! ✅"); 
-        fetchAllData(true);
+        fetchAllData();
     });
   };
 
@@ -266,7 +270,7 @@ function App() {
     if (!error) {
         alert("User Data Updated! ✅");
         handleCheckUser();
-        fetchAllData(true); 
+        fetchAllData(); 
     }
   };
 
@@ -361,7 +365,7 @@ function App() {
               {tasks.map(t => (
                 <div key={t.id} style={{display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #eee'}}>
                    <span style={{fontSize:12}}>{t.name} ({t.type})</span>
-                   <button onClick={async () => { if(window.confirm("Are you sure you want to delete this task?")){ await supabase.from('global_tasks').delete().eq('id', t.id); fetchAllData(true); } }} style={{background:'red', color:'#fff', border:'none', borderRadius:5, fontSize:10, padding:'3px 8px'}}>DELETE</button>
+                   <button onClick={async () => { if(window.confirm("Are you sure you want to delete this task?")){ await supabase.from('global_tasks').delete().eq('id', t.id); fetchAllData(); } }} style={{background:'red', color:'#fff', border:'none', borderRadius:5, fontSize:10, padding:'3px 8px'}}>DELETE</button>
                 </div>
               ))}
               <input style={styles.input} placeholder="Task Name" value={taskName} onChange={e=>setTaskName(e.target.value)} />
@@ -371,18 +375,18 @@ function App() {
               </select>
               <button style={{...styles.btn, width:'100%'}} onClick={async ()=>{
                 await supabase.from('global_tasks').insert([{name:taskName, link:taskLink, type:taskType}]);
-                alert("Task Added Successfully!"); fetchAllData(true);
+                alert("Task Added Successfully!"); fetchAllData();
               }}>ADD TASK</button>
             </div>
           ) : (
-            // TASK LIST: ONLY SHOW IF NOT IN COMPLETED_TASKS
+            // TASK FILTER: Hides tasks after balance is added
             tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(t.id)).map(t => (
-              <div key={t.id} style={styles.card}>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                    <span style={{fontWeight:'bold', fontSize:14}}>{t.name}</span>
-                    <button onClick={()=>handleStartTask(t)} style={{...styles.btn, padding:'8px 15px'}}>START</button>
+                <div key={t.id} style={styles.card}>
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                      <span style={{fontWeight:'bold', fontSize:14}}>{t.name}</span>
+                      <button onClick={()=>handleStartTask(t)} style={{...styles.btn, padding:'8px 15px'}}>START</button>
+                  </div>
                 </div>
-              </div>
             ))
           )
         )}
