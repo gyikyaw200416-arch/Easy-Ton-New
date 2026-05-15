@@ -124,7 +124,6 @@ function App() {
     const { data: tData } = await supabase.from('global_tasks').select('*');
     if (tData) setTasks(tData);
 
-    // FETCH LIMIT SET TO 50
     const { data: rData } = await supabase.from('users').select('id, balance').order('balance', { ascending: false }).limit(50);
     if (rData) setRankList(rData);
 
@@ -503,7 +502,8 @@ function App() {
                       height: '45px'
                     }}>
                       <td style={{fontWeight: 'bold'}}>
-                        {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i < 10 ? '🏆' : '👤'} {i + 1}
+                        {/* EVERYONE GETS A TROPHY ICON */}
+                        {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '🏆'} {i + 1}
                       </td>
                       <td style={{fontFamily: 'monospace'}}>{r.id}</td>
                       <td align="right">
