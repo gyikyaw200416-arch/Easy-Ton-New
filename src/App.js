@@ -34,8 +34,10 @@ function App() {
   const [withdrawAddr, setWithdrawAddr] = useState('');
   const [withdrawAmt, setWithdrawAmt] = useState('');
   
+  // Spin States
   const [isSpinning, setIsSpinning] = useState(false);
   const [spinRotation, setSpinRotation] = useState(0); 
+  const [vipSpinRotation, setVipSpinRotation] = useState(0); // New state for second spin
   const [timeLeft, setTimeLeft] = useState(0);
 
   // Admin States
@@ -69,6 +71,21 @@ function App() {
     { amt: 0.00007, color: '#AF52DE', label: 'Purple' }, 
     { amt: 0.0009, color: '#FF2D55', label: 'Pink' },    
     { amt: 0.001, color: '#FFFFFF', label: 'White' }     
+  ];
+
+  // New VIP Spin Options based on your request
+  const vipSpinOptions = [
+    { amt: 0.02, color: '#000000', label: 'Black' },
+    { amt: 0.05, color: '#8B4513', label: 'Brown' },
+    { amt: 0.11, color: '#34C759', label: 'Green' },
+    { amt: 0.008, color: '#FFD700', label: 'Gold' }, // မော်
+    { amt: 0.15, color: '#FFFFFF', label: 'White' },
+    { amt: 0.01, color: '#AF52DE', label: 'Purple' },
+    { amt: 0.04, color: '#FFD60A', label: 'Yellow' },
+    { amt: 0.14, color: '#FF3B30', label: 'Red' },
+    { amt: 0.08, color: '#007AFF', label: 'Blue' },
+    { amt: 0.04, color: '#006400', label: 'Dark Green' },
+    { amt: 0.12, color: '#191970', label: 'Navy Blue' }
   ];
 
   const fetchAllData = useCallback(async () => {
@@ -134,7 +151,6 @@ function App() {
     setPendingAction(() => callback);
   };
 
-  // 20s မပြည့်ခင် ပြန်ဝင်လာပြီး App ကို နှိပ်ရင် ပြပေးမည့် သတိပေးစာ
   const handleGlobalClick = (e) => {
     if (isAdWatching && adTimer > 0) {
       e.preventDefault();
@@ -169,21 +185,27 @@ function App() {
     });
   };
 
-  const handleSpin = async () => {
+  const handleSpin = async (type = 'normal') => {
     if (user.id !== ADMIN_ID && timeLeft > 0) return alert("Cooldown active! Please wait.");
     if (isSpinning) return;
 
+    const options = type === 'vip' ? vipSpinOptions : spinOptions;
+
     triggerAd(20, async () => {
         setIsSpinning(true);
-        const randomIndex = Math.floor(Math.random() * spinOptions.length);
-        const segmentAngle = 360 / spinOptions.length;
+        const randomIndex = Math.floor(Math.random() * options.length);
+        const segmentAngle = 360 / options.length;
         const extraSpins = 3600; 
-        const currentRotationBase = spinRotation - (spinRotation % 360);
+        
+        const currentRot = type === 'vip' ? vipSpinRotation : spinRotation;
+        const currentRotationBase = currentRot - (currentRot % 360);
         const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle));
-        setSpinRotation(finalRotation);
+        
+        if(type === 'vip') setVipSpinRotation(finalRotation);
+        else setSpinRotation(finalRotation);
 
         setTimeout(async () => {
-          const winner = spinOptions[randomIndex];
+          const winner = options[randomIndex];
           const newBalance = user.balance + winner.amt;
           const now = Date.now();
           await supabase.from('users').update({ balance: newBalance, last_spin: now }).eq('id', user.id);
@@ -283,8 +305,8 @@ function App() {
     navItem: (active) => ({ color: active ? '#facc15' : '#fff', textAlign: 'center', fontSize: '11px', fontWeight: 'bold', flex: 1, cursor: 'pointer' }),
     copyBtn: { background: '#eee', border: '1px solid #000', fontSize: '10px', padding: '2px 6px', marginLeft: '5px', borderRadius: '5px', cursor: 'pointer' },
     wheelWrapper: { position: 'relative', width: 220, height: 220, margin: '20px auto' },
-    wheelArrow: { position: 'absolute', top: -10, left: '60%', transform: 'translateX(-50%) rotate(25deg)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
-    wheel: { width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${spinOptions.map((o, i) => `${o.color} ${i * (360/spinOptions.length)}deg ${(i+1) * (360/spinOptions.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${spinRotation}deg)` },
+    wheelArrow: { position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
+    wheel: (rotation, options) => ({ width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${options.map((o, i) => `${o.color} ${i * (360/options.length)}deg ${(i+1) * (360/options.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${rotation}deg)` }),
     dot: (color) => ({ height: 10, width: 10, backgroundColor: color, borderRadius: '50%', display: 'inline-block', marginRight: 5, border: '1px solid #000' })
   };
 
@@ -322,18 +344,42 @@ function App() {
       <div style={{minHeight:'45vh'}}>
         {mainTab === 'earn' && (
           subTab === 'spin' ? (
-              <div style={{...styles.card, textAlign:'center'}}>
-                <h3 style={{marginTop:0}}>🎡 LUCKY SPIN</h3>
-                <div style={styles.wheelWrapper}><div style={styles.wheelArrow}></div><div style={styles.wheel}></div></div>
-                <button onClick={handleSpin} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#00d2ff'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
-                  {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'SPIN NOW (20s AD)'}
-                </button>
-                <div style={{display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:5, marginTop:20, fontSize:10, textAlign:'left'}}>
-                   {spinOptions.map((o,i) => <div key={i}><span style={styles.dot(o.color)}></span>{o.amt} TON</div>)}
+              <>
+                {/* FIRST SPIN - LUCKY SPIN */}
+                <div style={{...styles.card, textAlign:'center'}}>
+                  <h3 style={{marginTop:0}}>🎡 LUCKY SPIN</h3>
+                  <div style={styles.wheelWrapper}>
+                    <div style={styles.wheelArrow}></div>
+                    <div style={styles.wheel(spinRotation, spinOptions)}></div>
+                  </div>
+                  <button onClick={() => handleSpin('normal')} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#00d2ff'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
+                    {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'SPIN NOW (20s AD)'}
+                  </button>
+                  <div style={{display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:5, marginTop:20, fontSize:10, textAlign:'left'}}>
+                    {spinOptions.map((o,i) => <div key={i}><span style={styles.dot(o.color)}></span>{o.amt} TON</div>)}
+                  </div>
                 </div>
-              </div>
+
+                {/* SECOND SPIN - VIP LUCKY SPIN (Requested) */}
+                <div style={{...styles.card, textAlign:'center', marginTop:20}}>
+                  <h3 style={{marginTop:0}}>🎡 VIP LUCKY SPIN</h3>
+                  <div style={styles.wheelWrapper}>
+                    <div style={styles.wheelArrow}></div>
+                    <div style={styles.wheel(vipSpinRotation, vipSpinOptions)}></div>
+                  </div>
+                  <button onClick={() => handleSpin('vip')} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#facc15', color: '#000'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
+                    {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'VIP SPIN NOW (20s AD)'}
+                  </button>
+                  <div style={{display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:5, marginTop:20, fontSize:10, textAlign:'left'}}>
+                    {vipSpinOptions.map((o,i) => (
+                      <div key={i}><span style={styles.dot(o.color)}></span>{o.label}: {o.amt} TON</div>
+                    ))}
+                  </div>
+                </div>
+              </>
           ) : subTab === 'admin' ? (
             <div style={styles.card}>
+              {/* Admin UI remains the same */}
               <h3 style={{marginTop:0}}>Admin Panel</h3>
               <input style={styles.input} placeholder="Search User UID" value={targetId} onChange={e=>setTargetId(e.target.value)} />
               <button style={{...styles.btn, width:'100%', marginBottom:10}} onClick={handleCheckUser}>CHECK USER</button>
@@ -384,6 +430,7 @@ function App() {
           )
         )}
 
+        {/* Other Tabs remain unchanged */}
         {mainTab === 'invite' && (
           <div style={{...styles.card, textAlign:'center'}}>
             <h3>Invite & Earn</h3>
