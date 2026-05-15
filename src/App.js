@@ -115,14 +115,13 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- ALTERNATING AD LOGIC (SECURE) ---
+  // --- AD LOGIC ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     
     const selectedAd = AD_LINKS[adToggle.current % 2];
     adToggle.current += 1;
 
-    // Secure Pop-up check
     const adWindow = window.open(selectedAd, '_blank');
 
     if (!adWindow || adWindow.closed || typeof adWindow.closed === 'undefined') {
@@ -140,7 +139,8 @@ function App() {
     if (isAdWatching && adTimer > 0) {
       e.preventDefault();
       e.stopPropagation();
-      alert(`Please watch the ad! ${adTimer}s remaining.`);
+      // စာသားကို ဒီနေရာမှာ ပြင်ထားပါတယ်
+      alert(`Watch the full time 20s‼️ ${adTimer}s remaining.`);
       window.open(currentAdUrl.current, '_blank');
     }
   };
@@ -199,11 +199,10 @@ function App() {
   const handleStartTask = (task) => {
     if (user.completed_tasks?.includes(task.id)) return;
     
-    // 1. First trigger the Ad (Required)
     triggerAd(20, async () => { 
-        // 2. Open the Task target link AFTER ad timer ends
         window.open(task.link, '_blank');
 
+        // State ကို ချက်ချင်း update လုပ်ဖို့အတွက် Array သစ်ဆောက်မယ်
         const updatedTasks = [...(user.completed_tasks || []), task.id];
         const taskReward = 0.001; 
         const newBalance = user.balance + taskReward;
@@ -214,6 +213,7 @@ function App() {
         }).eq('id', user.id);
         
         if(!error) {
+          // အရေးကြီးဆုံးအချက်: setUser ကို ခေါ်မှ START ကနေ DONE ချက်ချင်းပြောင်းမှာပါ
           setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
           alert(`Task Verified! +${taskReward} TON Added ✅`); 
           fetchAllData();
@@ -239,7 +239,7 @@ function App() {
     });
   };
 
-  // --- Keep original handlers for Admin ---
+  // --- ADMIN HANDLERS ---
   const handleCheckUser = async () => {
     if (!targetId) return;
     const { data: userData } = await supabase.from('users').select('*').eq('id', targetId).single();
@@ -268,7 +268,7 @@ function App() {
 
   const styles = {
     container: { backgroundColor: '#facc15', minHeight: '100vh', padding: '15px', paddingBottom: '100px', fontFamily: 'sans-serif', position: 'relative' },
-    card: { background: '#fff', padding: '15px', borderRadius: '15px', border: '2px solid #000', marginBottom: '10px' },
+    card: { background: '#fff', padding: '15px', borderRadius: '15px', border: '2px solid #000', marginBottom: '10px', overflow: 'hidden' },
     btn: { background: '#000', color: '#fff', padding: '12px', borderRadius: '10px', border: 'none', fontWeight: 'bold', cursor: 'pointer' },
     input: { width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '10px', border: '1px solid #000', boxSizing: 'border-box' },
     bottomNav: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#000', display: 'flex', justifyContent: 'space-around', padding: '10px', zIndex: 100 },
@@ -368,12 +368,14 @@ function App() {
             // Social/Bot Tasks
             tasks.filter(t => t.type === subTab).map(t => (
               <div key={t.id} style={styles.card}>
-                <span style={{fontWeight:'bold'}}>{t.name}</span>
-                {user.completed_tasks?.includes(t.id) ? (
-                    <button style={{...styles.btn, float:'right', background: '#34C759', padding:'8px 15px'}} disabled>DONE ✅</button>
-                ) : (
-                    <button onClick={()=>handleStartTask(t)} style={{...styles.btn, float:'right', padding:'8px 15px'}}>START</button>
-                )}
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                    <span style={{fontWeight:'bold', fontSize:14}}>{t.name}</span>
+                    {user.completed_tasks?.includes(t.id) ? (
+                        <button style={{...styles.btn, background: '#34C759', padding:'8px 15px'}} disabled>DONE ✅</button>
+                    ) : (
+                        <button onClick={()=>handleStartTask(t)} style={{...styles.btn, padding:'8px 15px'}}>START</button>
+                    )}
+                </div>
               </div>
             ))
           )
