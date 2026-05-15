@@ -133,6 +133,7 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
+  // --- AD LOGIC ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     const selectedAd = AD_LINKS[adToggle.current % 2];
@@ -188,6 +189,7 @@ function App() {
     });
   };
 
+  // --- REWARD LOGIC FIX ---
   const startSpinExecution = async () => {
     if (!readyToSpin || isSpinning) return;
     const type = readyToSpin;
@@ -195,14 +197,17 @@ function App() {
     setReadyToSpin(null);
 
     const options = type === 'vip' ? vipSpinOptions : spinOptions;
+    
+    // Generate a random rotation
     const randomExtraDegrees = Math.floor(Math.random() * 360);
-    const totalSpins = 3600; 
+    const totalSpins = 3600; // 10 full rotations
     const newRotation = (type === 'vip' ? vipSpinRotation : spinRotation) + totalSpins + randomExtraDegrees;
     
     if(type === 'vip') setVipSpinRotation(newRotation);
     else setSpinRotation(newRotation);
 
     setTimeout(async () => {
+      // Calculate winner based on the degree pointing at the top (12 o'clock)
       const actualDegree = (360 - (newRotation % 360)) % 360;
       const segmentSize = 360 / options.length;
       const winningIndex = Math.floor(actualDegree / segmentSize);
@@ -318,7 +323,7 @@ function App() {
         transform: `rotate(${rotation}deg)` 
     }),
     dot: (color) => ({ height: 10, width: 10, backgroundColor: color, borderRadius: '50%', display: 'inline-block', marginRight: 5, border: '1px solid #000' }),
-    depositBox: { background: '#f8f9fa', padding: '12px', borderRadius: '12px', border: '2px solid #000', marginTop: '10px', textAlign: 'left', fontSize: '12px' }
+    depositBox: { background: '#f8f9fa', padding: '10px', borderRadius: '10px', border: '1px solid #ddd', marginTop: '15px', textAlign: 'left', fontSize: '12px' }
   };
 
   if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>LOADING...</div>;
@@ -326,23 +331,10 @@ function App() {
   return (
     <div style={styles.container} onClick={handleGlobalClick}>
       
-      {/* --- BALANCE DISPLAY & DEPOSIT --- */}
       <div style={{background:'#000', color:'#fff', padding:20, borderRadius:20, textAlign:'center', marginBottom:15, border: '2px solid #fff'}}>
          <small style={{opacity:0.7}}>MY TOTAL BALANCE</small>
          <h1 style={{margin:'5px 0', fontSize:32}}>{user.balance.toFixed(5)} TON</h1>
          {user.is_vip && <span style={{color:'#facc15', fontSize:12, fontWeight:'bold'}}>⭐ VIP MEMBER</span>}
-         
-         <div style={styles.depositBox}>
-            <div style={{color:'#000', fontWeight:'bold', marginBottom:8, fontSize:14, textAlign:'center'}}>📥 DEPOSIT (FOR VIP/SPIN)</div>
-            <div style={{color:'#444', marginBottom:5}}>
-              <b>Address:</b> <span style={{fontSize:10}}>{DEPOSIT_ADDRESS.slice(0,15)}...</span>
-              <button style={styles.copyBtn} onClick={()=>{navigator.clipboard.writeText(DEPOSIT_ADDRESS); alert("Address Copied!");}}>COPY</button>
-            </div>
-            <div style={{color:'#444'}}>
-              <b>Memo:</b> <span>{user.id}</span>
-              <button style={styles.copyBtn} onClick={()=>{navigator.clipboard.writeText(user.id); alert("Memo Copied!");}}>COPY</button>
-            </div>
-         </div>
       </div>
 
       <div style={{display:'flex', justifyContent:'center', gap:20, marginBottom:10, fontSize:12, fontWeight:'bold'}}>
@@ -369,7 +361,6 @@ function App() {
         {mainTab === 'earn' && (
           subTab === 'spin' ? (
               <>
-                {/* Standard Spin */}
                 <div style={{...styles.card, textAlign:'center'}}>
                   <h3 style={{marginTop:0}}>🎡 LUCKY SPIN</h3>
                   <div style={styles.wheelWrapper}>
@@ -392,10 +383,10 @@ function App() {
                   </div>
                 </div>
 
-                {/* VIP Lucky Spin - Updated Label */}
                 <div style={{...styles.card, textAlign:'center', marginTop:20}}>
                   <h3 style={{marginTop:0, color:'#b8860b'}}>🎡 VIP LUCKY SPIN</h3>
-                  <p style={{fontSize: 11, color: '#666'}}>Cost per Spin: <b>0.1 TON</b></p>
+                  {/* Changed text below as requested */}
+                  <p style={{fontSize: 11, color: '#666'}}>Cost per Spin: <b>0.1 TON Spin</b></p>
                   <div style={styles.wheelWrapper}>
                     <div style={styles.wheelArrow}></div>
                     <div style={styles.wheel(vipSpinRotation, vipSpinOptions)}></div>
@@ -407,9 +398,20 @@ function App() {
                     </button>
                   ) : (
                     <button onClick={() => prepareSpin('vip')} style={{...styles.btn, width:'100%', background: (user.balance >= 0.1) ? '#facc15' : '#ccc', color: '#000'}} disabled={isSpinning || user.balance < 0.1}>
-                      {user.balance >= 0.1 ? 'PREPARE VIP SPIN (20s AD)' : '0.1 TON Spin'}
+                      {user.balance >= 0.1 ? 'PREPARE VIP SPIN (20s AD)' : 'INSUFFICIENT BALANCE'}
                     </button>
                   )}
+
+                  {/* Added Deposit Section below the Insufficient/Spin button */}
+                  <div style={{ ...styles.depositBox, background: '#fff9c4', border: '1px dashed #000' }}>
+                    <h4 style={{ margin: '0 0 5px 0' }}>📥 Deposit</h4>
+                    <p style={{ fontSize: '10px', margin: '2px 0' }}><b>Address:</b> {DEPOSIT_ADDRESS} 
+                      <button style={styles.copyBtn} onClick={() => { navigator.clipboard.writeText(DEPOSIT_ADDRESS); alert("Address Copied!"); }}>COPY</button>
+                    </p>
+                    <p style={{ fontSize: '10px', margin: '2px 0' }}><b>Memo:</b> {user.id} 
+                      <button style={styles.copyBtn} onClick={() => { navigator.clipboard.writeText(user.id); alert("Memo Copied!"); }}>COPY</button>
+                    </p>
+                  </div>
 
                   <div style={{display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:5, marginTop:20, fontSize:10, textAlign:'left'}}>
                     {vipSpinOptions.map((o,i) => (
@@ -513,10 +515,10 @@ function App() {
             <div style={{...styles.card, border: '2px solid gold', background: '#fffcf0'}}>
                 <h4 style={{margin:0, color: '#b8860b'}}>💎 UPGRADE VIP (1 TON)</h4>
                 <p style={{fontSize:11, wordBreak:'break-all'}}>{DEPOSIT_ADDRESS}
-                  <button style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(DEPOSIT_ADDRESS); alert("Copied!");}}>COPY</button>
+                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(DEPOSIT_ADDRESS); alert("Copied!");}}>COPY</span>
                 </p>
                 <p style={{fontSize:11}}>Memo: {user.id}
-                  <button style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(user.id); alert("Copied!");}}>COPY</button>
+                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(user.id); alert("Copied!");}}>COPY</span>
                 </p>
             </div>
             <div style={styles.card}>
