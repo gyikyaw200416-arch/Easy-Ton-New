@@ -37,7 +37,7 @@ function App() {
   
   // Spin States
   const [isSpinning, setIsSpinning] = useState(false);
-  const [readyToSpin, setReadyToSpin] = useState(null); // 'normal' or 'vip'
+  const [readyToSpin, setReadyToSpin] = useState(null); 
   const [spinRotation, setSpinRotation] = useState(0); 
   const [vipSpinRotation, setVipSpinRotation] = useState(0); 
   const [timeLeft, setTimeLeft] = useState(0);
@@ -204,7 +204,10 @@ function App() {
     const extraSpins = 3600; 
     const currentRot = type === 'vip' ? vipSpinRotation : spinRotation;
     const currentRotationBase = currentRot - (currentRot % 360);
-    const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle));
+    
+    // Correct landing calculation for the new arrow position (approx 2 o'clock / 60 degrees)
+    // Offset added: 60 degrees
+    const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle)) + 60;
     
     if(type === 'vip') setVipSpinRotation(finalRotation);
     else setSpinRotation(finalRotation);
@@ -227,7 +230,7 @@ function App() {
       await supabase.from('users').update(updateData).eq('id', user.id);
       setUser(prev => ({ ...prev, ...updateData }));
       
-      alert(`Landed on ${winner.label}! ${type === 'vip' ? '-0.1 TON ' : ''}+${winner.amt} TON Added ✅`);
+      alert(`Landed on ${winner.label}! ${type === 'vip' ? '-0.1 TON (Spin Cost) ' : ''}+${winner.amt} TON Added ✅`);
       setIsSpinning(false);
       fetchAllData();
     }, 4000);
@@ -300,16 +303,16 @@ function App() {
     navItem: (active) => ({ color: active ? '#facc15' : '#fff', textAlign: 'center', fontSize: '11px', fontWeight: 'bold', flex: 1, cursor: 'pointer' }),
     copyBtn: { background: '#eee', border: '1px solid #000', fontSize: '10px', padding: '4px 8px', marginLeft: '5px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' },
     wheelWrapper: { position: 'relative', width: 220, height: 220, margin: '20px auto' },
-    // Arrow Positioned near 12 o'clock but slightly to the right as per user image
+    // --- UPDATED ARROW POSITION ---
     wheelArrow: { 
         position: 'absolute', 
-        top: '-15px', // Top position
-        left: '52%',  // Slightly right of center (12 o'clock is 50%)
-        transform: 'translateX(-50%)', 
+        top: '2%',          // Move higher
+        right: '5%',        // Position to the right (around 2 o'clock)
         width: 0, height: 0, 
         borderLeft: '15px solid transparent', 
         borderRight: '15px solid transparent', 
         borderTop: '30px solid #000', 
+        transform: 'rotate(150deg)', // Pointing inward to center from top-right
         zIndex: 10 
     },
     wheel: (rotation, options) => ({ width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${options.map((o, i) => `${o.color} ${i * (360/options.length)}deg ${(i+1) * (360/options.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${rotation}deg)` }),
@@ -334,7 +337,7 @@ function App() {
       </div>
 
       <button onClick={handleWatchAds} style={{...styles.btn, width:'100%', background:'linear-gradient(to right, #ff416c, #ff4b2b)', marginBottom:15, height:50, fontSize:16, border:'2px solid #000'}}>
-        📺 WATCH ADS & EARN
+        📺 WATCH ADS & EARN (30s)
       </button>
 
       {mainTab === 'earn' && (
@@ -388,7 +391,7 @@ function App() {
                     </button>
                   ) : (
                     <button onClick={() => prepareSpin('vip')} style={{...styles.btn, width:'100%', background: (user.balance >= 0.1) ? '#facc15' : '#ccc', color: '#000'}} disabled={isSpinning || user.balance < 0.1}>
-                      {user.balance >= 0.1 ? 'PREPARE VIP SPIN (20s AD)' : 'INSUFFICIENT BALANCE'}
+                      {user.balance >= 0.1 ? 'PREPARE VIP SPIN (20s AD)' : 'INSUFFICIENT BALANCE (MIN 0.1 TON)'}
                     </button>
                   )}
 
@@ -409,12 +412,14 @@ function App() {
                   <p>UID: {searchedUser.id}</p>
                   <label style={{fontSize:11}}>Balance:</label>
                   <input style={styles.input} type="number" value={editBal} onChange={e=>setEditBal(e.target.value)} />
+                  
                   <label style={{fontSize:11}}>Status:</label>
                   <select style={styles.input} value={editVip} onChange={e=>setEditVip(e.target.value === 'true')}>
                     <option value="false">Standard Account</option>
                     <option value="true">VIP Account ⭐</option>
                   </select>
-                  <button style={{...styles.btn, width:'100%', background:'green', marginBottom:15}} onClick={handleUpdateUser}>UPDATE USER</button>
+                  <button style={{...styles.btn, width:'100%', background:'green', marginBottom:15}} onClick={handleUpdateUser}>UPDATE USER DATA</button>
+                  
                   {userWithdraws.map(w => (
                     <div key={w.id} style={{fontSize:11, marginBottom:10}}>
                         {w.amount} TON to {w.address.slice(0,10)}...
@@ -424,21 +429,21 @@ function App() {
                 </div>
               )}
               <hr/>
-              <h4>Tasks</h4>
+              <h4>Manage Tasks</h4>
               {tasks.map(t => (
                 <div key={t.id} style={{display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #eee'}}>
                    <span style={{fontSize:12}}>{t.name} ({t.type})</span>
-                   <button onClick={async () => { if(window.confirm("Are you sure?")){ await supabase.from('global_tasks').delete().eq('id', t.id); fetchAllData(); } }} style={{background:'red', color:'#fff', border:'none', borderRadius:5, fontSize:10, padding:'3px 8px'}}>DEL</button>
+                   <button onClick={async () => { if(window.confirm("Are you sure?")){ await supabase.from('global_tasks').delete().eq('id', t.id); fetchAllData(); } }} style={{background:'red', color:'#fff', border:'none', borderRadius:5, fontSize:10, padding:'3px 8px'}}>DELETE</button>
                 </div>
               ))}
-              <input style={styles.input} placeholder="Name" value={taskName} onChange={e=>setTaskName(e.target.value)} />
-              <input style={styles.input} placeholder="Link" value={taskLink} onChange={e=>setTaskLink(e.target.value)} />
+              <input style={styles.input} placeholder="Task Name" value={taskName} onChange={e=>setTaskName(e.target.value)} />
+              <input style={styles.input} placeholder="Task Link" value={taskLink} onChange={e=>setTaskLink(e.target.value)} />
               <select style={styles.input} value={taskType} onChange={e=>setTaskType(e.target.value)}>
-                <option value="bot">Bot</option><option value="social">Social</option>
+                <option value="bot">Bot Task</option><option value="social">Social Task</option>
               </select>
               <button style={{...styles.btn, width:'100%'}} onClick={async ()=>{
                 await supabase.from('global_tasks').insert([{name:taskName, link:taskLink, type:taskType}]);
-                alert("Added!"); fetchAllData();
+                alert("Task Added!"); fetchAllData();
               }}>ADD TASK</button>
             </div>
           ) : (
@@ -456,16 +461,17 @@ function App() {
         {mainTab === 'invite' && (
           <div style={{...styles.card, textAlign:'center'}}>
             <h3>Invite & Earn</h3>
-            <p style={{color:'green', fontWeight:'bold'}}>Reward: +0.005 TON</p>
+            <p style={{color:'green', fontWeight:'bold'}}>Invite Friend: +0.005 TON Reward!</p>
             <div style={{background:'#eee', padding:15, borderRadius:10, wordBreak:'break-all', marginBottom:15}}>
                 <code>t.me/EasyTONFree_Bot?start={user.id}</code>
             </div>
-            <button onClick={() => {navigator.clipboard.writeText(`https://t.me/EasyTONFree_Bot?start=${user.id}`); alert("Copied!");}} style={{...styles.btn, width:'100%'}}>COPY LINK</button>
+            <button onClick={() => {navigator.clipboard.writeText(`https://t.me/EasyTONFree_Bot?start=${user.id}`); alert("Referral link copied!");}} style={{...styles.btn, width:'100%'}}>COPY LINK</button>
             <div style={{marginTop:20, textAlign:'left'}}>
-               <h4>History</h4>
+               <h4>Invite History</h4>
                {invites.map((inv, i) => (
                  <div key={i} style={{fontSize:11, padding:5, borderBottom:'1px solid #eee'}}>
-                    User: {inv.id} <b style={{float:'right', color:'green'}}>+0.005 TON ✅</b>
+                    User ID: {inv.id}
+                    <b style={{float:'right', color:'green'}}>+0.005 TON Verified ✅</b>
                  </div>
                ))}
             </div>
@@ -474,9 +480,9 @@ function App() {
 
         {mainTab === 'rank' && (
           <div style={styles.card}>
-            <h3 style={{textAlign:'center', marginTop:0}}>🏆 TOP 50</h3>
+            <h3 style={{textAlign:'center', marginTop:0}}>🏆 TOP 50 RANKINGS</h3>
             <table style={{width:'100%', fontSize:12, borderCollapse:'collapse'}}>
-              <thead><tr style={{borderBottom:'2px solid #000'}}><th align="left">User ID</th><th align="right">Balance</th></tr></thead>
+              <thead><tr style={{borderBottom:'2px solid #000'}}><th align="left">User ID</th><th align="right">Amount</th></tr></thead>
               <tbody>
                 {rankList.map((r, i) => (
                   <tr key={i} style={{borderBottom:'1px solid #eee', background: r.id === user.id ? '#fff9c4' : 'none'}}>
@@ -492,19 +498,19 @@ function App() {
         {mainTab === 'withdraw' && (
           <div>
             <div style={{...styles.card, border: '2px solid gold', background: '#fffcf0'}}>
-                <h4 style={{margin:0, color: '#b8860b'}}>💎 UPGRADE VIP (1 TON)</h4>
+                <h4 style={{margin:0, color: '#b8860b'}}>💎 UPGRADE TO VIP (1 TON)</h4>
                 <p style={{fontSize:11, wordBreak:'break-all'}}>{DEPOSIT_ADDRESS}
-                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(DEPOSIT_ADDRESS); alert("Copied!");}}>COPY</span>
+                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(DEPOSIT_ADDRESS); alert("Address Copied!");}}>COPY</span>
                 </p>
                 <p style={{fontSize:11}}>Memo: {user.id}
-                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(user.id); alert("Copied!");}}>COPY</span>
+                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(user.id); alert("Memo Copied!");}}>COPY</span>
                 </p>
             </div>
             <div style={styles.card}>
               <h4>Withdraw TON</h4>
-              <input style={styles.input} placeholder="Wallet Address" value={withdrawAddr} onChange={e=>setWithdrawAddr(e.target.value)} />
-              <input style={styles.input} placeholder="Amount (Min 0.1)" type="number" value={withdrawAmt} onChange={e=>setWithdrawAmt(e.target.value)} />
-              <button onClick={handleWithdraw} style={{...styles.btn, width:'100%', background:'#0052ff'}}>WITHDRAW</button>
+              <input style={styles.input} placeholder="Enter TON Wallet Address" value={withdrawAddr} onChange={e=>setWithdrawAddr(e.target.value)} />
+              <input style={styles.input} placeholder="Amount (Minimum 0.1)" type="number" value={withdrawAmt} onChange={e=>setWithdrawAmt(e.target.value)} />
+              <button onClick={handleWithdraw} style={{...styles.btn, width:'100%', background:'#0052ff'}}>WITHDRAW (20s AD)</button>
             </div>
             {withdraws.map((w,i) => (
               <div key={i} style={{...styles.card, fontSize:13}}>
@@ -517,13 +523,13 @@ function App() {
 
         {mainTab === 'profile' && (
           <div style={{...styles.card, textAlign:'center'}}>
-            <h3>Profile</h3>
+            <h3>Profile Settings</h3>
             <div style={{textAlign:'left', marginBottom:20, background: '#f9f9f9', padding: 15, borderRadius: 10}}>
-                <p><b>ID:</b> {user.id}</p>
-                <p><b>Balance:</b> {user.balance.toFixed(5)} TON</p>
-                <p><b>Status:</b> {user.is_vip ? "VIP Member ⭐" : "Standard User"}</p>
+                <p><b>Account ID:</b> {user.id}</p>
+                <p><b>Current Balance:</b> {user.balance.toFixed(5)} TON</p>
+                <p><b>Member Status:</b> {user.is_vip ? "VIP Member ⭐" : "Standard User"}</p>
             </div>
-            <button onClick={()=>window.open("https://t.me/EasyTonHelp_Bot")} style={{...styles.btn, width:'100%', background:'#0088cc'}}>SUPPORT</button>
+            <button onClick={()=>window.open("https://t.me/EasyTonHelp_Bot")} style={{...styles.btn, width:'100%', background:'#0088cc'}}>CONTACT SUPPORT</button>
           </div>
         )}
       </div>
