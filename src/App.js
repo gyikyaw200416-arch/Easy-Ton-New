@@ -71,6 +71,7 @@ function App() {
     { amt: 0.001, color: '#FFFFFF', label: 'White' }     
   ];
 
+  // --- DATA FETCHING (FIXED) ---
   const fetchAllData = useCallback(async () => {
     let { data: uData } = await supabase.from('users').select('*').eq('id', user.id).single();
     
@@ -87,7 +88,12 @@ function App() {
         }]).select().single();
         uData = newUser;
     }
-    setUser(uData);
+
+    // Ensure completed_tasks is always an array to prevent "START" button flickering
+    setUser({
+        ...uData,
+        completed_tasks: uData.completed_tasks || []
+    });
     
     const waitTime = 1 * 60 * 60 * 1000; 
     const diff = waitTime - (Date.now() - (uData.last_spin || 0));
@@ -194,34 +200,35 @@ function App() {
     });
   };
 
-  // --- TASK LOGIC (FIXED FOR 'DONE' STATUS) ---
+  // --- TASK LOGIC (RE-FIXED) ---
   const handleStartTask = (task) => {
-    if (user.completed_tasks?.includes(task.id)) return;
+    // 1. Check if already completed locally
+    if (user.completed_tasks && user.completed_tasks.includes(task.id)) return;
     
     triggerAd(20, async () => { 
         window.open(task.link, '_blank');
 
-        // ၁။ User ရဲ့ completed_tasks array အသစ်ကို local မှာ အရင်ပြင်မယ်
-        const updatedCompletedTasks = [...(user.completed_tasks || []), task.id];
+        // 2. Prepare updated data
+        const updatedTasks = user.completed_tasks ? [...user.completed_tasks, task.id] : [task.id];
         const taskReward = 0.001; 
-        const newBalance = user.balance + taskReward;
+        const newBalance = (user.balance || 0) + taskReward;
         
-        // ၂။ Database ကို update လုပ်မယ်
+        // 3. Update Local State FIRST (UI stays "DONE")
+        setUser(prev => ({ 
+          ...prev, 
+          balance: newBalance, 
+          completed_tasks: updatedTasks 
+        }));
+
+        // 4. Update Database
         const { error } = await supabase.from('users').update({ 
           balance: newBalance, 
-          completed_tasks: updatedCompletedTasks 
+          completed_tasks: updatedTasks 
         }).eq('id', user.id);
         
         if(!error) {
-          // ၃။ Local state ကိုပါ update လုပ်လိုက်တဲ့အတွက် UI မှာ ခလုတ်က ချက်ချင်း DONE ဖြစ်သွားမယ်
-          setUser(prev => ({ 
-            ...prev, 
-            balance: newBalance, 
-            completed_tasks: updatedCompletedTasks 
-          }));
           alert(`Task Verified! +${taskReward} TON Added ✅`); 
-          // ၄။ Database နဲ့ data တိုက်ဆိုင်စစ်ဆေးဖို့ ပြန်ခေါ်မယ်
-          fetchAllData();
+          fetchAllData(); // Sync with DB
         } else {
           alert("Error verifying task. Please try again.");
         }
