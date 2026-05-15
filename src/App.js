@@ -193,12 +193,11 @@ function App() {
     });
   };
 
-  // --- TASK LOGIC (HIDE AFTER DONE) ---
+  // --- TASK LOGIC (HIDE ONLY AFTER COMPLETE & ADD BALANCE) ---
   const handleStartTask = (task) => {
-    // Check if task already completed
     if (user.completed_tasks?.includes(task.id)) return;
     
-    // Start Ad (20s) AND Open Task Link simultaneously
+    // Logic: Start Ad Timer AND Open Task Link simultaneously
     window.open(task.link, '_blank');
     
     triggerAd(20, async () => { 
@@ -207,7 +206,7 @@ function App() {
         const taskReward = 0.001; 
         const newBalance = user.balance + taskReward;
         
-        // Update database
+        // 1. Update Database
         const { error } = await supabase
           .from('users')
           .update({ 
@@ -217,7 +216,7 @@ function App() {
           .eq('id', user.id);
         
         if(!error) {
-          // Update local state (Task will vanish because of the filter in render)
+          // 2. Only after DB success: Update Local State so Task disappears from screen
           setUser(prev => ({ 
             ...prev, 
             balance: newBalance, 
@@ -225,6 +224,7 @@ function App() {
           }));
           
           alert(`Task Verified! +${taskReward} TON Added ✅`); 
+          // 3. Refresh list to ensure it's gone
           fetchAllData(true);
         } else {
           alert("Error verifying task. Please try again.");
@@ -375,7 +375,7 @@ function App() {
               }}>ADD TASK</button>
             </div>
           ) : (
-            // TASK LIST: ONLY SHOW IF NOT COMPLETED
+            // TASK LIST: ONLY SHOW IF NOT IN COMPLETED_TASKS
             tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(t.id)).map(t => (
               <div key={t.id} style={styles.card}>
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
