@@ -8,6 +8,7 @@ const supabase = createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5c2d6enF5dWJ0Z3ZkZ2hsZGVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MzM4ODQsImV4cCI6MjA5MzUwOTg4NH0.-4JDl5X--fNYrRyuaOzyUXz0FaJpIxNSLLzcjGrlavQ"
 );
 const ADMIN_ID = "1793453606"; 
+const DEPOSIT_ADDRESS = "UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9";
 
 const AD_LINKS = [
   "https://data527.click/a674e1237b7e268eb5f6/ff9984d88d/?placementName=default",
@@ -37,7 +38,7 @@ function App() {
   // Spin States
   const [isSpinning, setIsSpinning] = useState(false);
   const [spinRotation, setSpinRotation] = useState(0); 
-  const [vipSpinRotation, setVipSpinRotation] = useState(0); // New state for second spin
+  const [vipSpinRotation, setVipSpinRotation] = useState(0); 
   const [timeLeft, setTimeLeft] = useState(0);
 
   // Admin States
@@ -73,12 +74,11 @@ function App() {
     { amt: 0.001, color: '#FFFFFF', label: 'White' }     
   ];
 
-  // New VIP Spin Options based on your request
   const vipSpinOptions = [
     { amt: 0.02, color: '#000000', label: 'Black' },
     { amt: 0.05, color: '#8B4513', label: 'Brown' },
     { amt: 0.11, color: '#34C759', label: 'Green' },
-    { amt: 0.008, color: '#FFD700', label: 'Gold' }, // မော်
+    { amt: 0.008, color: '#FFD700', label: 'Gold' }, 
     { amt: 0.15, color: '#FFFFFF', label: 'White' },
     { amt: 0.01, color: '#AF52DE', label: 'Purple' },
     { amt: 0.04, color: '#FFD60A', label: 'Yellow' },
@@ -139,12 +139,9 @@ function App() {
   // --- AD LOGIC ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
-    
     const selectedAd = AD_LINKS[adToggle.current % 2];
     adToggle.current += 1;
-
     window.open(selectedAd, '_blank');
-
     currentAdUrl.current = selectedAd;
     setIsAdWatching(true);
     setAdTimer(duration);
@@ -188,22 +185,17 @@ function App() {
   const handleSpin = async (type = 'normal') => {
     if (user.id !== ADMIN_ID && timeLeft > 0) return alert("Cooldown active! Please wait.");
     if (isSpinning) return;
-
     const options = type === 'vip' ? vipSpinOptions : spinOptions;
-
     triggerAd(20, async () => {
         setIsSpinning(true);
         const randomIndex = Math.floor(Math.random() * options.length);
         const segmentAngle = 360 / options.length;
         const extraSpins = 3600; 
-        
         const currentRot = type === 'vip' ? vipSpinRotation : spinRotation;
         const currentRotationBase = currentRot - (currentRot % 360);
         const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle));
-        
         if(type === 'vip') setVipSpinRotation(finalRotation);
         else setSpinRotation(finalRotation);
-
         setTimeout(async () => {
           const winner = options[randomIndex];
           const newBalance = user.balance + winner.amt;
@@ -220,35 +212,17 @@ function App() {
   const handleStartTask = (task) => {
     const taskIdStr = String(task.id);
     if (user.completed_tasks?.includes(taskIdStr)) return;
-    
     window.open(task.link, '_blank');
-
     triggerAd(20, async () => { 
         const currentTasks = user.completed_tasks ? [...user.completed_tasks] : [];
         if (currentTasks.includes(taskIdStr)) return; 
-
         const taskReward = 0.001; 
         const newBalance = (user.balance || 0) + taskReward;
         const updatedCompletedTasks = [...currentTasks, taskIdStr];
-        
-        setUser(prev => ({ 
-            ...prev, 
-            balance: newBalance, 
-            completed_tasks: updatedCompletedTasks 
-        }));
-
-        const { error } = await supabase
-          .from('users')
-          .update({ 
-            balance: newBalance, 
-            completed_tasks: updatedCompletedTasks 
-          })
-          .eq('id', user.id);
-        
-        if(!error) {
-          alert(`Task Verified! +${taskReward} TON Added ✅`); 
-          setTimeout(() => fetchAllData(), 500);
-        }
+        setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedCompletedTasks }));
+        await supabase.from('users').update({ balance: newBalance, completed_tasks: updatedCompletedTasks }).eq('id', user.id);
+        alert(`Task Verified! +${taskReward} TON Added ✅`); 
+        setTimeout(() => fetchAllData(), 500);
     });
   };
 
@@ -257,7 +231,6 @@ function App() {
         const amt = Number(withdrawAmt);
         if (amt < 0.1) return alert("Minimum withdrawal is 0.1 TON");
         if (amt > user.balance) return alert("Insufficient balance!");
-        
         const currentDate = new Date().toISOString();
         await supabase.from('withdrawals').insert([{ 
             user_id: user.id, amount: amt, address: withdrawAddr, status: 'Pending', created_at: currentDate 
@@ -283,11 +256,7 @@ function App() {
   const handleUpdateUser = async () => {
     const updatedFields = { balance: Number(editBal), is_vip: editVip };
     const { error } = await supabase.from('users').update(updatedFields).eq('id', targetId);
-    if (!error) {
-        alert("User Data Updated! ✅");
-        handleCheckUser();
-        fetchAllData(); 
-    }
+    if (!error) { alert("User Data Updated! ✅"); handleCheckUser(); fetchAllData(); }
   };
 
   const approveWithdraw = async (wId) => {
@@ -303,11 +272,12 @@ function App() {
     input: { width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '10px', border: '1px solid #000', boxSizing: 'border-box' },
     bottomNav: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#000', display: 'flex', justifyContent: 'space-around', padding: '10px', zIndex: 100 },
     navItem: (active) => ({ color: active ? '#facc15' : '#fff', textAlign: 'center', fontSize: '11px', fontWeight: 'bold', flex: 1, cursor: 'pointer' }),
-    copyBtn: { background: '#eee', border: '1px solid #000', fontSize: '10px', padding: '2px 6px', marginLeft: '5px', borderRadius: '5px', cursor: 'pointer' },
+    copyBtn: { background: '#eee', border: '1px solid #000', fontSize: '10px', padding: '4px 8px', marginLeft: '5px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' },
     wheelWrapper: { position: 'relative', width: 220, height: 220, margin: '20px auto' },
     wheelArrow: { position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
     wheel: (rotation, options) => ({ width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${options.map((o, i) => `${o.color} ${i * (360/options.length)}deg ${(i+1) * (360/options.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${rotation}deg)` }),
-    dot: (color) => ({ height: 10, width: 10, backgroundColor: color, borderRadius: '50%', display: 'inline-block', marginRight: 5, border: '1px solid #000' })
+    dot: (color) => ({ height: 10, width: 10, backgroundColor: color, borderRadius: '50%', display: 'inline-block', marginRight: 5, border: '1px solid #000' }),
+    depositBox: { background: '#f8f9fa', padding: '10px', borderRadius: '10px', border: '1px solid #ddd', marginTop: '15px', textAlign: 'left', fontSize: '12px' }
   };
 
   if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>LOADING...</div>;
@@ -360,7 +330,7 @@ function App() {
                   </div>
                 </div>
 
-                {/* SECOND SPIN - VIP LUCKY SPIN (Requested) */}
+                {/* SECOND SPIN - VIP LUCKY SPIN */}
                 <div style={{...styles.card, textAlign:'center', marginTop:20}}>
                   <h3 style={{marginTop:0}}>🎡 VIP LUCKY SPIN</h3>
                   <div style={styles.wheelWrapper}>
@@ -368,8 +338,22 @@ function App() {
                     <div style={styles.wheel(vipSpinRotation, vipSpinOptions)}></div>
                   </div>
                   <button onClick={() => handleSpin('vip')} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#facc15', color: '#000'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
-                    {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'VIP SPIN NOW (20s AD)'}
+                    {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : '0.1 TON SPIN'}
                   </button>
+
+                  {/* Deposit Info for VIP Spin */}
+                  <div style={styles.depositBox}>
+                    <p style={{margin:'0 0 5px 0', fontWeight:'bold', color:'#d97706'}}>To play VIP Spin, Deposit 0.1 TON:</p>
+                    <div style={{marginBottom: 5}}>
+                      Address: <code style={{fontSize:'10px'}}>{DEPOSIT_ADDRESS}</code>
+                      <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(DEPOSIT_ADDRESS); alert("Address Copied!");}}>COPY</span>
+                    </div>
+                    <div>
+                      Memo: <code>{user.id}</code>
+                      <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(user.id); alert("Memo Copied!");}}>COPY</span>
+                    </div>
+                  </div>
+
                   <div style={{display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:5, marginTop:20, fontSize:10, textAlign:'left'}}>
                     {vipSpinOptions.map((o,i) => (
                       <div key={i}><span style={styles.dot(o.color)}></span>{o.label}: {o.amt} TON</div>
@@ -379,7 +363,6 @@ function App() {
               </>
           ) : subTab === 'admin' ? (
             <div style={styles.card}>
-              {/* Admin UI remains the same */}
               <h3 style={{marginTop:0}}>Admin Panel</h3>
               <input style={styles.input} placeholder="Search User UID" value={targetId} onChange={e=>setTargetId(e.target.value)} />
               <button style={{...styles.btn, width:'100%', marginBottom:10}} onClick={handleCheckUser}>CHECK USER</button>
@@ -430,7 +413,6 @@ function App() {
           )
         )}
 
-        {/* Other Tabs remain unchanged */}
         {mainTab === 'invite' && (
           <div style={{...styles.card, textAlign:'center'}}>
             <h3>Invite & Earn</h3>
@@ -472,8 +454,8 @@ function App() {
           <div>
             <div style={{...styles.card, border: '2px solid gold', background: '#fffcf0'}}>
                 <h4 style={{margin:0, color: '#b8860b'}}>💎 UPGRADE TO VIP (1 TON)</h4>
-                <p style={{fontSize:11, wordBreak:'break-all'}}>UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9
-                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText('UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9'); alert("Address Copied!");}}>COPY</span>
+                <p style={{fontSize:11, wordBreak:'break-all'}}>{DEPOSIT_ADDRESS}
+                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(DEPOSIT_ADDRESS); alert("Address Copied!");}}>COPY</span>
                 </p>
                 <p style={{fontSize:11}}>Memo: {user.id}
                   <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(user.id); alert("Memo Copied!");}}>COPY</span>
