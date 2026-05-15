@@ -15,13 +15,13 @@ const AD_LINKS = [
   "https://www.profitablecpmratenetwork.com/pmi0yt9u?key=3580805003ccb6983acba9b61b6cb7e2"
 ];
 
-// --- UPDATED RANK REWARDS LIST (1 to 50) ---
+// --- RANK REWARDS LIST (1 to 50) ---
 const RANK_REWARDS = [
   30, 28, 25, 20, 20, 15, 15, 10, 10, 10, 
   5, 5, 5, 3, 3, 3, 3, 2, 2, 2, 
   2, 2, 1, 1, 1, 1, 1, 1, 1, 1,
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 31-40
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1  // 41-50
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1  
 ];
 
 function App() {
@@ -124,7 +124,7 @@ function App() {
     const { data: tData } = await supabase.from('global_tasks').select('*');
     if (tData) setTasks(tData);
 
-    // LIMIT INCREASED TO 50
+    // FETCH LIMIT SET TO 50
     const { data: rData } = await supabase.from('users').select('id, balance').order('balance', { ascending: false }).limit(50);
     if (rData) setRankList(rData);
 
@@ -312,7 +312,6 @@ function App() {
     dot: (color) => ({ height: 10, width: 10, backgroundColor: color, borderRadius: '50%', display: 'inline-block', marginRight: 5, border: '1px solid #000' }),
     depositBox: { background: '#f8f9fa', padding: '10px', borderRadius: '10px', border: '1px solid #ddd', marginTop: '15px', textAlign: 'left', fontSize: '12px' },
     rankHeader: { textAlign: 'center', marginBottom: '10px', background: 'linear-gradient(45deg, #FFD700, #FFA500)', padding: '10px', borderRadius: '15px', border: '2px solid #000', color: '#000', fontWeight: '900' },
-    // NEW SCROLL STYLE
     rankScrollBox: { maxHeight: '420px', overflowY: 'auto', paddingRight: '5px' }
   };
 
@@ -481,7 +480,7 @@ function App() {
           </div>
         )}
 
-        {/* --- UPDATED RANK SECTION FOR 50 USERS --- */}
+        {/* --- UPDATED RANK SECTION (TOP 50 LEADERS) --- */}
         {mainTab === 'rank' && (
           <div style={styles.card}>
             <div style={styles.rankHeader}>
@@ -516,7 +515,7 @@ function App() {
                           fontSize: '10px',
                           fontWeight: 'bold'
                         }}>
-                          {RANK_REWARDS[i] || 0} TON
+                          {RANK_REWARDS[i] !== undefined ? RANK_REWARDS[i] : 1} TON
                         </span>
                       </td>
                     </tr>
