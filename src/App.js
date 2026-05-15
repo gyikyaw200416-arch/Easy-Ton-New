@@ -8,7 +8,6 @@ const supabase = createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5c2d6enF5dWJ0Z3ZkZ2hsZGVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MzM4ODQsImV4cCI6MjA5MzUwOTg4NH0.-4JDl5X--fNYrRyuaOzyUXz0FaJpIxNSLLzcjGrlavQ"
 );
 const ADMIN_ID = "1793453606"; 
-const DEPOSIT_ADDRESS = "UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9";
 
 const AD_LINKS = [
   "https://data527.click/a674e1237b7e268eb5f6/ff9984d88d/?placementName=default",
@@ -23,8 +22,7 @@ function App() {
     balance: 0, 
     is_vip: false, 
     completed_tasks: [], 
-    last_spin: 0,
-    vip_spins_left: 0 // New field for admin-granted spins
+    last_spin: 0 
   });
   
   const [tasks, setTasks] = useState([]);
@@ -36,11 +34,8 @@ function App() {
   const [withdrawAddr, setWithdrawAddr] = useState('');
   const [withdrawAmt, setWithdrawAmt] = useState('');
   
-  // Spin States
   const [isSpinning, setIsSpinning] = useState(false);
-  const [readyToSpin, setReadyToSpin] = useState(null); // 'normal' or 'vip'
   const [spinRotation, setSpinRotation] = useState(0); 
-  const [vipSpinRotation, setVipSpinRotation] = useState(0); 
   const [timeLeft, setTimeLeft] = useState(0);
 
   // Admin States
@@ -49,7 +44,6 @@ function App() {
   const [userWithdraws, setUserWithdraws] = useState([]);
   const [editBal, setEditBal] = useState('');
   const [editVip, setEditVip] = useState(false);
-  const [editSpins, setEditSpins] = useState(0);
   const [taskName, setTaskName] = useState('');
   const [taskLink, setTaskLink] = useState('');
   const [taskType, setTaskType] = useState('bot');
@@ -77,20 +71,6 @@ function App() {
     { amt: 0.001, color: '#FFFFFF', label: 'White' }     
   ];
 
-  const vipSpinOptions = [
-    { amt: 0.02, color: '#000000', label: 'Black' },
-    { amt: 0.05, color: '#8B4513', label: 'Brown' },
-    { amt: 0.11, color: '#34C759', label: 'Green' },
-    { amt: 0.008, color: '#FFD700', label: 'Gold' }, 
-    { amt: 0.15, color: '#FFFFFF', label: 'White' },
-    { amt: 0.01, color: '#AF52DE', label: 'Purple' },
-    { amt: 0.04, color: '#FFD60A', label: 'Yellow' },
-    { amt: 0.14, color: '#FF3B30', label: 'Red' },
-    { amt: 0.08, color: '#007AFF', label: 'Blue' },
-    { amt: 0.04, color: '#006400', label: 'Dark Green' },
-    { amt: 0.12, color: '#191970', label: 'Navy Blue' }
-  ];
-
   const fetchAllData = useCallback(async () => {
     let { data: uData } = await supabase.from('users').select('*').eq('id', user.id).single();
     
@@ -103,15 +83,16 @@ function App() {
             }
         }
         const { data: newUser } = await supabase.from('users').insert([{ 
-            id: user.id, balance: 0, invited_by: startParam, completed_tasks: [], last_spin: 0, vip_spins_left: 0
+            id: user.id, balance: 0, invited_by: startParam, completed_tasks: [], last_spin: 0 
         }]).select().single();
         uData = newUser;
     }
     
-    setUser({
+    const sanitizedUser = {
         ...uData,
         completed_tasks: uData.completed_tasks ? uData.completed_tasks.map(String) : []
-    });
+    };
+    setUser(sanitizedUser);
     
     const waitTime = 1 * 60 * 60 * 1000; 
     const diff = waitTime - (Date.now() - (uData.last_spin || 0));
@@ -141,15 +122,19 @@ function App() {
   // --- AD LOGIC ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
+    
     const selectedAd = AD_LINKS[adToggle.current % 2];
     adToggle.current += 1;
+
     window.open(selectedAd, '_blank');
+
     currentAdUrl.current = selectedAd;
     setIsAdWatching(true);
     setAdTimer(duration);
     setPendingAction(() => callback);
   };
 
+  // 20s မပြည့်ခင် ပြန်ဝင်လာပြီး App ကို နှိပ်ရင် ပြပေးမည့် သတိပေးစာ
   const handleGlobalClick = (e) => {
     if (isAdWatching && adTimer > 0) {
       e.preventDefault();
@@ -184,66 +169,64 @@ function App() {
     });
   };
 
-  // Preparation for Spin (after Ad)
-  const prepareSpin = (type) => {
-    if (user.id !== ADMIN_ID && timeLeft > 0 && type === 'normal') return alert("Cooldown active!");
-    if (type === 'vip' && user.vip_spins_left <= 0) return alert("No VIP spins available! Please deposit.");
-    
-    triggerAd(20, () => {
-        setReadyToSpin(type);
-        alert("Ad finished! You can now click 'SPIN NOW' to start.");
+  const handleSpin = async () => {
+    if (user.id !== ADMIN_ID && timeLeft > 0) return alert("Cooldown active! Please wait.");
+    if (isSpinning) return;
+
+    triggerAd(20, async () => {
+        setIsSpinning(true);
+        const randomIndex = Math.floor(Math.random() * spinOptions.length);
+        const segmentAngle = 360 / spinOptions.length;
+        const extraSpins = 3600; 
+        const currentRotationBase = spinRotation - (spinRotation % 360);
+        const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle));
+        setSpinRotation(finalRotation);
+
+        setTimeout(async () => {
+          const winner = spinOptions[randomIndex];
+          const newBalance = user.balance + winner.amt;
+          const now = Date.now();
+          await supabase.from('users').update({ balance: newBalance, last_spin: now }).eq('id', user.id);
+          setUser(prev => ({ ...prev, balance: newBalance, last_spin: now }));
+          alert(`Landed on ${winner.label}! +${winner.amt} TON ✅`);
+          setIsSpinning(false);
+          fetchAllData();
+        }, 4000);
     });
-  };
-
-  const startSpinExecution = async () => {
-    if (!readyToSpin || isSpinning) return;
-    const type = readyToSpin;
-    setIsSpinning(true);
-    setReadyToSpin(null);
-
-    const options = type === 'vip' ? vipSpinOptions : spinOptions;
-    const randomIndex = Math.floor(Math.random() * options.length);
-    const segmentAngle = 360 / options.length;
-    const extraSpins = 3600; 
-    const currentRot = type === 'vip' ? vipSpinRotation : spinRotation;
-    const currentRotationBase = currentRot - (currentRot % 360);
-    const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle));
-    
-    if(type === 'vip') setVipSpinRotation(finalRotation);
-    else setSpinRotation(finalRotation);
-
-    setTimeout(async () => {
-      const winner = options[randomIndex];
-      const newBalance = user.balance + winner.amt;
-      const now = Date.now();
-      
-      const updateData = { balance: newBalance };
-      if (type === 'normal') updateData.last_spin = now;
-      if (type === 'vip') updateData.vip_spins_left = Math.max(0, user.vip_spins_left - 1);
-
-      await supabase.from('users').update(updateData).eq('id', user.id);
-      setUser(prev => ({ ...prev, ...updateData }));
-      
-      alert(`Landed on ${winner.label}! +${winner.amt} TON ✅`);
-      setIsSpinning(false);
-      fetchAllData();
-    }, 4000);
   };
 
   const handleStartTask = (task) => {
     const taskIdStr = String(task.id);
     if (user.completed_tasks?.includes(taskIdStr)) return;
+    
     window.open(task.link, '_blank');
+
     triggerAd(20, async () => { 
         const currentTasks = user.completed_tasks ? [...user.completed_tasks] : [];
         if (currentTasks.includes(taskIdStr)) return; 
+
         const taskReward = 0.001; 
         const newBalance = (user.balance || 0) + taskReward;
         const updatedCompletedTasks = [...currentTasks, taskIdStr];
-        setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedCompletedTasks }));
-        await supabase.from('users').update({ balance: newBalance, completed_tasks: updatedCompletedTasks }).eq('id', user.id);
-        alert(`Task Verified! +${taskReward} TON Added ✅`); 
-        setTimeout(() => fetchAllData(), 500);
+        
+        setUser(prev => ({ 
+            ...prev, 
+            balance: newBalance, 
+            completed_tasks: updatedCompletedTasks 
+        }));
+
+        const { error } = await supabase
+          .from('users')
+          .update({ 
+            balance: newBalance, 
+            completed_tasks: updatedCompletedTasks 
+          })
+          .eq('id', user.id);
+        
+        if(!error) {
+          alert(`Task Verified! +${taskReward} TON Added ✅`); 
+          setTimeout(() => fetchAllData(), 500);
+        }
     });
   };
 
@@ -252,6 +235,7 @@ function App() {
         const amt = Number(withdrawAmt);
         if (amt < 0.1) return alert("Minimum withdrawal is 0.1 TON");
         if (amt > user.balance) return alert("Insufficient balance!");
+        
         const currentDate = new Date().toISOString();
         await supabase.from('withdrawals').insert([{ 
             user_id: user.id, amount: amt, address: withdrawAddr, status: 'Pending', created_at: currentDate 
@@ -268,19 +252,20 @@ function App() {
     if (!targetId) return;
     const { data: userData } = await supabase.from('users').select('*').eq('id', targetId).single();
     if (userData) { 
-        setSearchedUser(userData); 
-        setEditBal(userData.balance); 
-        setEditVip(userData.is_vip);
-        setEditSpins(userData.vip_spins_left || 0);
+        setSearchedUser(userData); setEditBal(userData.balance); setEditVip(userData.is_vip);
         const { data: wData } = await supabase.from('withdrawals').select('*').eq('user_id', targetId).eq('status', 'Pending');
         setUserWithdraws(wData || []);
     } else { alert("User Not Found!"); }
   };
 
   const handleUpdateUser = async () => {
-    const updatedFields = { balance: Number(editBal), is_vip: editVip, vip_spins_left: Number(editSpins) };
+    const updatedFields = { balance: Number(editBal), is_vip: editVip };
     const { error } = await supabase.from('users').update(updatedFields).eq('id', targetId);
-    if (!error) { alert("User Data Updated! ✅"); handleCheckUser(); fetchAllData(); }
+    if (!error) {
+        alert("User Data Updated! ✅");
+        handleCheckUser();
+        fetchAllData(); 
+    }
   };
 
   const approveWithdraw = async (wId) => {
@@ -296,22 +281,11 @@ function App() {
     input: { width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '10px', border: '1px solid #000', boxSizing: 'border-box' },
     bottomNav: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#000', display: 'flex', justifyContent: 'space-around', padding: '10px', zIndex: 100 },
     navItem: (active) => ({ color: active ? '#facc15' : '#fff', textAlign: 'center', fontSize: '11px', fontWeight: 'bold', flex: 1, cursor: 'pointer' }),
-    copyBtn: { background: '#eee', border: '1px solid #000', fontSize: '10px', padding: '4px 8px', marginLeft: '5px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' },
+    copyBtn: { background: '#eee', border: '1px solid #000', fontSize: '10px', padding: '2px 6px', marginLeft: '5px', borderRadius: '5px', cursor: 'pointer' },
     wheelWrapper: { position: 'relative', width: 220, height: 220, margin: '20px auto' },
-    wheelArrow: { 
-        position: 'absolute', 
-        top: '50%', 
-        right: -15, 
-        transform: 'translateY(-50%) rotate(90deg)', 
-        width: 0, height: 0, 
-        borderLeft: '15px solid transparent', 
-        borderRight: '15px solid transparent', 
-        borderTop: '30px solid #000', 
-        zIndex: 10 
-    },
-    wheel: (rotation, options) => ({ width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${options.map((o, i) => `${o.color} ${i * (360/options.length)}deg ${(i+1) * (360/options.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${rotation}deg)` }),
-    dot: (color) => ({ height: 10, width: 10, backgroundColor: color, borderRadius: '50%', display: 'inline-block', marginRight: 5, border: '1px solid #000' }),
-    depositBox: { background: '#f8f9fa', padding: '10px', borderRadius: '10px', border: '1px solid #ddd', marginTop: '15px', textAlign: 'left', fontSize: '12px' }
+    wheelArrow: { position: 'absolute', top: -10, left: '60%', transform: 'translateX(-50%) rotate(25deg)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '30px solid #000', zIndex: 10 },
+    wheel: { width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${spinOptions.map((o, i) => `${o.color} ${i * (360/spinOptions.length)}deg ${(i+1) * (360/spinOptions.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${spinRotation}deg)` },
+    dot: (color) => ({ height: 10, width: 10, backgroundColor: color, borderRadius: '50%', display: 'inline-block', marginRight: 5, border: '1px solid #000' })
   };
 
   if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>LOADING...</div>;
@@ -348,68 +322,16 @@ function App() {
       <div style={{minHeight:'45vh'}}>
         {mainTab === 'earn' && (
           subTab === 'spin' ? (
-              <>
-                {/* LUCKY SPIN */}
-                <div style={{...styles.card, textAlign:'center'}}>
-                  <h3 style={{marginTop:0}}>🎡 LUCKY SPIN</h3>
-                  <div style={styles.wheelWrapper}>
-                    <div style={styles.wheelArrow}></div>
-                    <div style={styles.wheel(spinRotation, spinOptions)}></div>
-                  </div>
-                  
-                  {readyToSpin === 'normal' ? (
-                    <button onClick={startSpinExecution} style={{...styles.btn, width:'100%', background: '#34C759'}} disabled={isSpinning}>
-                      {isSpinning ? 'SPINNING...' : '🚀 SPIN NOW'}
-                    </button>
-                  ) : (
-                    <button onClick={() => prepareSpin('normal')} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#00d2ff'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
-                      {(user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'PREPARE SPIN (20s AD)'}
-                    </button>
-                  )}
-
-                  <div style={{display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:5, marginTop:20, fontSize:10, textAlign:'left'}}>
-                    {spinOptions.map((o,i) => <div key={i}><span style={styles.dot(o.color)}></span>{o.amt} TON</div>)}
-                  </div>
+              <div style={{...styles.card, textAlign:'center'}}>
+                <h3 style={{marginTop:0}}>🎡 LUCKY SPIN</h3>
+                <div style={styles.wheelWrapper}><div style={styles.wheelArrow}></div><div style={styles.wheel}></div></div>
+                <button onClick={handleSpin} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#00d2ff'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
+                  {isSpinning ? 'SPINNING...' : (user.id !== ADMIN_ID && timeLeft > 0) ? `WAIT ${Math.ceil(timeLeft/60000)} MIN` : 'SPIN NOW (20s AD)'}
+                </button>
+                <div style={{display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:5, marginTop:20, fontSize:10, textAlign:'left'}}>
+                   {spinOptions.map((o,i) => <div key={i}><span style={styles.dot(o.color)}></span>{o.amt} TON</div>)}
                 </div>
-
-                {/* VIP LUCKY SPIN */}
-                <div style={{...styles.card, textAlign:'center', marginTop:20}}>
-                  <h3 style={{marginTop:0}}>🎡 VIP LUCKY SPIN</h3>
-                  <p style={{fontSize: 11, color: '#666'}}>Available VIP Spins: <b>{user.vip_spins_left || 0}</b></p>
-                  <div style={styles.wheelWrapper}>
-                    <div style={styles.wheelArrow}></div>
-                    <div style={styles.wheel(vipSpinRotation, vipSpinOptions)}></div>
-                  </div>
-
-                  {readyToSpin === 'vip' ? (
-                    <button onClick={startSpinExecution} style={{...styles.btn, width:'100%', background: '#34C759'}} disabled={isSpinning}>
-                      {isSpinning ? 'SPINNING...' : '🚀 SPIN NOW'}
-                    </button>
-                  ) : (
-                    <button onClick={() => prepareSpin('vip')} style={{...styles.btn, width:'100%', background: (user.vip_spins_left > 0) ? '#facc15' : '#ccc', color: '#000'}} disabled={isSpinning || user.vip_spins_left <= 0}>
-                      {user.vip_spins_left > 0 ? 'PREPARE VIP SPIN (20s AD)' : '0.1 TON DEPOSIT REQUIRED'}
-                    </button>
-                  )}
-
-                  <div style={styles.depositBox}>
-                    <p style={{margin:'0 0 5px 0', fontWeight:'bold', color:'#d97706'}}>To get VIP Spins, Deposit 0.1 TON (1 Spin):</p>
-                    <div style={{marginBottom: 5}}>
-                      Address: <code style={{fontSize:'10px'}}>{DEPOSIT_ADDRESS}</code>
-                      <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(DEPOSIT_ADDRESS); alert("Address Copied!");}}>COPY</span>
-                    </div>
-                    <div>
-                      Memo: <code>{user.id}</code>
-                      <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(user.id); alert("Memo Copied!");}}>COPY</span>
-                    </div>
-                  </div>
-
-                  <div style={{display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:5, marginTop:20, fontSize:10, textAlign:'left'}}>
-                    {vipSpinOptions.map((o,i) => (
-                      <div key={i}><span style={styles.dot(o.color)}></span>{o.label}: {o.amt} TON</div>
-                    ))}
-                  </div>
-                </div>
-              </>
+              </div>
           ) : subTab === 'admin' ? (
             <div style={styles.card}>
               <h3 style={{marginTop:0}}>Admin Panel</h3>
@@ -418,19 +340,12 @@ function App() {
               {searchedUser && (
                 <div style={{background:'#f0f9ff', padding:15, borderRadius:10, border:'1px solid #000', marginBottom:10}}>
                   <p>UID: {searchedUser.id}</p>
-                  <label style={{fontSize:11}}>Balance:</label>
                   <input style={styles.input} type="number" value={editBal} onChange={e=>setEditBal(e.target.value)} />
-                  
-                  <label style={{fontSize:11}}>VIP Spins Turn:</label>
-                  <input style={styles.input} type="number" placeholder="Spin count" value={editSpins} onChange={e=>setEditSpins(e.target.value)} />
-
-                  <label style={{fontSize:11}}>Status:</label>
                   <select style={styles.input} value={editVip} onChange={e=>setEditVip(e.target.value === 'true')}>
                     <option value="false">Standard Account</option>
                     <option value="true">VIP Account ⭐</option>
                   </select>
-                  <button style={{...styles.btn, width:'100%', background:'green', marginBottom:15}} onClick={handleUpdateUser}>UPDATE USER DATA</button>
-                  
+                  <button style={{...styles.btn, width:'100%', background:'green', marginBottom:15}} onClick={handleUpdateUser}>UPDATE DATA</button>
                   {userWithdraws.map(w => (
                     <div key={w.id} style={{fontSize:11, marginBottom:10}}>
                         {w.amount} TON to {w.address.slice(0,10)}...
@@ -444,7 +359,7 @@ function App() {
               {tasks.map(t => (
                 <div key={t.id} style={{display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #eee'}}>
                    <span style={{fontSize:12}}>{t.name} ({t.type})</span>
-                   <button onClick={async () => { if(window.confirm("Are you sure?")){ await supabase.from('global_tasks').delete().eq('id', t.id); fetchAllData(); } }} style={{background:'red', color:'#fff', border:'none', borderRadius:5, fontSize:10, padding:'3px 8px'}}>DELETE</button>
+                   <button onClick={async () => { if(window.confirm("Are you sure you want to delete this task?")){ await supabase.from('global_tasks').delete().eq('id', t.id); fetchAllData(); } }} style={{background:'red', color:'#fff', border:'none', borderRadius:5, fontSize:10, padding:'3px 8px'}}>DELETE</button>
                 </div>
               ))}
               <input style={styles.input} placeholder="Task Name" value={taskName} onChange={e=>setTaskName(e.target.value)} />
@@ -454,7 +369,7 @@ function App() {
               </select>
               <button style={{...styles.btn, width:'100%'}} onClick={async ()=>{
                 await supabase.from('global_tasks').insert([{name:taskName, link:taskLink, type:taskType}]);
-                alert("Task Added!"); fetchAllData();
+                alert("Task Added Successfully!"); fetchAllData();
               }}>ADD TASK</button>
             </div>
           ) : (
@@ -510,8 +425,8 @@ function App() {
           <div>
             <div style={{...styles.card, border: '2px solid gold', background: '#fffcf0'}}>
                 <h4 style={{margin:0, color: '#b8860b'}}>💎 UPGRADE TO VIP (1 TON)</h4>
-                <p style={{fontSize:11, wordBreak:'break-all'}}>{DEPOSIT_ADDRESS}
-                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(DEPOSIT_ADDRESS); alert("Address Copied!");}}>COPY</span>
+                <p style={{fontSize:11, wordBreak:'break-all'}}>UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9
+                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText('UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9'); alert("Address Copied!");}}>COPY</span>
                 </p>
                 <p style={{fontSize:11}}>Memo: {user.id}
                   <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(user.id); alert("Memo Copied!");}}>COPY</span>
@@ -539,7 +454,6 @@ function App() {
                 <p><b>Account ID:</b> {user.id}</p>
                 <p><b>Current Balance:</b> {user.balance.toFixed(5)} TON</p>
                 <p><b>Member Status:</b> {user.is_vip ? "VIP Member ⭐" : "Standard User"}</p>
-                <p><b>Available VIP Spins:</b> {user.vip_spins_left || 0}</p>
             </div>
             <button onClick={()=>window.open("https://t.me/EasyTonHelp_Bot")} style={{...styles.btn, width:'100%', background:'#0088cc'}}>CONTACT SUPPORT</button>
           </div>
