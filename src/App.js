@@ -48,7 +48,7 @@ function App() {
   const [taskLink, setTaskLink] = useState('');
   const [taskType, setTaskType] = useState('bot');
 
-  // --- AD ENGINE ---
+  // --- AD ENGINE STATES ---
   const [isAdWatching, setIsAdWatching] = useState(false);
   const [adTimer, setAdTimer] = useState(0);
   const [pendingAction, setPendingAction] = useState(null);
@@ -73,7 +73,6 @@ function App() {
 
   const fetchAllData = useCallback(async (isSilent = false) => {
     if (!isSilent) setLoading(true);
-
     let { data: uData } = await supabase.from('users').select('*').eq('id', user.id).single();
     
     if (!uData) {
@@ -116,11 +115,11 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
+  // --- AD ENGINE LOGIC ---
   const triggerAd = (duration, callback) => {
-    if (user.id === ADMIN_ID) return callback(); 
-    
     const selectedAd = AD_LINKS[adToggle.current % 2];
     adToggle.current += 1;
+
     const adWindow = window.open(selectedAd, '_blank');
 
     if (!adWindow || adWindow.closed || typeof adWindow.closed === 'undefined') {
@@ -164,7 +163,7 @@ function App() {
       await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
       setUser(prev => ({ ...prev, balance: newBalance }));
       alert(`Ad complete! Reward: +${reward} TON ✅`);
-      fetchAllData(true); 
+      fetchAllData(true);
     });
   };
 
@@ -176,8 +175,9 @@ function App() {
         setIsSpinning(true);
         const randomIndex = Math.floor(Math.random() * spinOptions.length);
         const segmentAngle = 360 / spinOptions.length;
+        const extraSpins = 3600; 
         const currentRotationBase = spinRotation - (spinRotation % 360);
-        const finalRotation = currentRotationBase + 3600 + (360 - (randomIndex * segmentAngle));
+        const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle));
         setSpinRotation(finalRotation);
 
         setTimeout(async () => {
@@ -193,37 +193,41 @@ function App() {
     });
   };
 
-  // --- REVISED TASK LOGIC (HIDE ON DONE) ---
+  // --- TASK LOGIC (HIDE AFTER DONE) ---
   const handleStartTask = (task) => {
+    // Check if task already completed
     if (user.completed_tasks?.includes(task.id)) return;
     
+    // Start Ad (20s) AND Open Task Link simultaneously
+    window.open(task.link, '_blank');
+    
     triggerAd(20, async () => { 
-        window.open(task.link, '_blank');
-
         const currentTasks = user.completed_tasks || [];
         const updatedCompletedTasks = [...currentTasks, task.id];
         const taskReward = 0.001; 
         const newBalance = user.balance + taskReward;
         
-        // 1. Update user state locally first (This hides the task immediately)
-        setUser(prev => ({ 
-          ...prev, 
-          balance: newBalance, 
-          completed_tasks: updatedCompletedTasks 
-        }));
-
-        // 2. Perform Database update
+        // Update database
         const { error } = await supabase
           .from('users')
-          .update({ balance: newBalance, completed_tasks: updatedCompletedTasks })
+          .update({ 
+            balance: newBalance, 
+            completed_tasks: updatedCompletedTasks 
+          })
           .eq('id', user.id);
         
         if(!error) {
+          // Update local state (Task will vanish because of the filter in render)
+          setUser(prev => ({ 
+            ...prev, 
+            balance: newBalance, 
+            completed_tasks: updatedCompletedTasks 
+          }));
+          
           alert(`Task Verified! +${taskReward} TON Added ✅`); 
-          fetchAllData(true); // Silent refresh
+          fetchAllData(true);
         } else {
           alert("Error verifying task. Please try again.");
-          fetchAllData();
         }
     });
   };
@@ -371,7 +375,7 @@ function App() {
               }}>ADD TASK</button>
             </div>
           ) : (
-            // TASK LIST: AUTOMATICALLY FILTER OUT COMPLETED TASKS
+            // TASK LIST: ONLY SHOW IF NOT COMPLETED
             tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(t.id)).map(t => (
               <div key={t.id} style={styles.card}>
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
