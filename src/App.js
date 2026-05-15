@@ -35,14 +35,12 @@ function App() {
   const [withdrawAddr, setWithdrawAddr] = useState('');
   const [withdrawAmt, setWithdrawAmt] = useState('');
   
-  // Spin States
   const [isSpinning, setIsSpinning] = useState(false);
   const [readyToSpin, setReadyToSpin] = useState(null); 
   const [spinRotation, setSpinRotation] = useState(0); 
   const [vipSpinRotation, setVipSpinRotation] = useState(0); 
   const [timeLeft, setTimeLeft] = useState(0);
 
-  // Admin States
   const [targetId, setTargetId] = useState('');
   const [searchedUser, setSearchedUser] = useState(null);
   const [userWithdraws, setUserWithdraws] = useState([]);
@@ -52,7 +50,6 @@ function App() {
   const [taskLink, setTaskLink] = useState('');
   const [taskType, setTaskType] = useState('bot');
 
-  // --- AD ENGINE STATES ---
   const [isAdWatching, setIsAdWatching] = useState(false);
   const [adTimer, setAdTimer] = useState(0);
   const [pendingAction, setPendingAction] = useState(null);
@@ -136,6 +133,7 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
+  // --- AD LOGIC ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     const selectedAd = AD_LINKS[adToggle.current % 2];
@@ -191,6 +189,7 @@ function App() {
     });
   };
 
+  // --- REWARD LOGIC FIX ---
   const startSpinExecution = async () => {
     if (!readyToSpin || isSpinning) return;
     const type = readyToSpin;
@@ -198,24 +197,24 @@ function App() {
     setReadyToSpin(null);
 
     const options = type === 'vip' ? vipSpinOptions : spinOptions;
-    const randomIndex = Math.floor(Math.random() * options.length);
-    const segmentAngle = 360 / options.length;
     
-    // CALCULATION LOGIC:
-    // To land exactly in the center of the segment:
-    // The pointer is at the top (0 deg). 
-    // We rotate the wheel such that the target segment moves to 0.
-    const targetAngle = (randomIndex * segmentAngle) + (segmentAngle / 2);
-    const extraSpins = 3600; // 10 Full rotations
+    // Generate a random rotation
+    const randomExtraDegrees = Math.floor(Math.random() * 360);
+    const totalSpins = 3600; // 10 full rotations
+    const newRotation = (type === 'vip' ? vipSpinRotation : spinRotation) + totalSpins + randomExtraDegrees;
     
-    // We subtract the targetAngle from a full rotation to bring it to the pointer
-    const finalRotation = (type === 'vip' ? vipSpinRotation : spinRotation) + extraSpins + (360 - (finalRotation % 360)) + (360 - targetAngle);
-    
-    if(type === 'vip') setVipSpinRotation(finalRotation);
-    else setSpinRotation(finalRotation);
+    if(type === 'vip') setVipSpinRotation(newRotation);
+    else setSpinRotation(newRotation);
 
     setTimeout(async () => {
-      const winner = options[randomIndex];
+      // Calculate winner based on the degree pointing at the top (12 o'clock)
+      // The arrow is at the top, which is 0 degrees.
+      // Final degree relative to 0 is (newRotation % 360)
+      const actualDegree = (360 - (newRotation % 360)) % 360;
+      const segmentSize = 360 / options.length;
+      const winningIndex = Math.floor(actualDegree / segmentSize);
+      const winner = options[winningIndex];
+
       let newBalance = user.balance + winner.amt;
       const now = Date.now();
       
@@ -223,7 +222,8 @@ function App() {
       if (type === 'normal') {
         updateData.balance = newBalance;
         updateData.last_spin = now;
-      } else if (type === 'vip') {
+      }
+      if (type === 'vip') {
         newBalance = (user.balance - 0.1) + winner.amt;
         updateData.balance = newBalance;
       }
@@ -303,7 +303,7 @@ function App() {
     bottomNav: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#000', display: 'flex', justifyContent: 'space-around', padding: '10px', zIndex: 100 },
     navItem: (active) => ({ color: active ? '#facc15' : '#fff', textAlign: 'center', fontSize: '11px', fontWeight: 'bold', flex: 1, cursor: 'pointer' }),
     copyBtn: { background: '#eee', border: '1px solid #000', fontSize: '10px', padding: '4px 8px', marginLeft: '5px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' },
-    wheelWrapper: { position: 'relative', width: 240, height: 240, margin: '20px auto' },
+    wheelWrapper: { position: 'relative', width: 220, height: 220, margin: '20px auto' },
     wheelArrow: { 
         position: 'absolute', 
         top: '-15px', 
@@ -316,12 +316,16 @@ function App() {
         zIndex: 10 
     },
     wheel: (rotation, options) => ({ 
-        width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', 
+        width: '100%', 
+        height: '100%', 
+        borderRadius: '50%', 
+        border: '5px solid #000', 
         background: `conic-gradient(${options.map((o, i) => `${o.color} ${i * (360/options.length)}deg ${(i+1) * (360/options.length)}deg`).join(', ')})`, 
         transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', 
         transform: `rotate(${rotation}deg)` 
     }),
-    dot: (color) => ({ height: 10, width: 10, backgroundColor: color, borderRadius: '50%', display: 'inline-block', marginRight: 5, border: '1px solid #000' })
+    dot: (color) => ({ height: 10, width: 10, backgroundColor: color, borderRadius: '50%', display: 'inline-block', marginRight: 5, border: '1px solid #000' }),
+    depositBox: { background: '#f8f9fa', padding: '10px', borderRadius: '10px', border: '1px solid #ddd', marginTop: '15px', textAlign: 'left', fontSize: '12px' }
   };
 
   if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>LOADING...</div>;
@@ -329,7 +333,6 @@ function App() {
   return (
     <div style={styles.container} onClick={handleGlobalClick}>
       
-      {/* Balance Header */}
       <div style={{background:'#000', color:'#fff', padding:20, borderRadius:20, textAlign:'center', marginBottom:15, border: '2px solid #fff'}}>
          <small style={{opacity:0.7}}>MY TOTAL BALANCE</small>
          <h1 style={{margin:'5px 0', fontSize:32}}>{user.balance.toFixed(5)} TON</h1>
@@ -378,7 +381,7 @@ function App() {
                   )}
 
                   <div style={{display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:5, marginTop:20, fontSize:10, textAlign:'left'}}>
-                    {spinOptions.map((o,i) => <div key={i}><span style={styles.dot(o.color)}></span>{o.amt} TON ({o.label})</div>)}
+                    {spinOptions.map((o,i) => <div key={i}><span style={styles.dot(o.color)}></span>{o.amt} TON</div>)}
                   </div>
                 </div>
 
@@ -409,7 +412,7 @@ function App() {
               </>
           ) : subTab === 'admin' ? (
             <div style={styles.card}>
-              <h3>Admin Panel</h3>
+              <h3 style={{marginTop:0}}>Admin Panel</h3>
               <input style={styles.input} placeholder="Search User UID" value={targetId} onChange={e=>setTargetId(e.target.value)} />
               <button style={{...styles.btn, width:'100%', marginBottom:10}} onClick={handleCheckUser}>CHECK USER</button>
               {searchedUser && (
@@ -432,7 +435,13 @@ function App() {
                 </div>
               )}
               <hr/>
-              <h4>Tasks Control</h4>
+              <h4>Tasks</h4>
+              {tasks.map(t => (
+                <div key={t.id} style={{display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #eee'}}>
+                   <span style={{fontSize:12}}>{t.name} ({t.type})</span>
+                   <button onClick={async () => { if(window.confirm("Are you sure?")){ await supabase.from('global_tasks').delete().eq('id', t.id); fetchAllData(); } }} style={{background:'red', color:'#fff', border:'none', borderRadius:5, fontSize:10, padding:'3px 8px'}}>DEL</button>
+                </div>
+              ))}
               <input style={styles.input} placeholder="Name" value={taskName} onChange={e=>setTaskName(e.target.value)} />
               <input style={styles.input} placeholder="Link" value={taskLink} onChange={e=>setTaskLink(e.target.value)} />
               <select style={styles.input} value={taskType} onChange={e=>setTaskType(e.target.value)}>
@@ -530,7 +539,6 @@ function App() {
         )}
       </div>
 
-      {/* Bottom Navigation */}
       <div style={styles.bottomNav}>
         <div onClick={()=>triggerAd(20, () => setMainTab('earn'))} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
         <div onClick={()=>triggerAd(20, () => setMainTab('invite'))} style={styles.navItem(mainTab==='invite')}>👥<br/>INVITE</div>
