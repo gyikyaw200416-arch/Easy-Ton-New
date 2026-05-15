@@ -21,7 +21,7 @@ function App() {
     id: tg?.initDataUnsafe?.user?.id?.toString() || "1793453606", 
     balance: 0, 
     is_vip: false, 
-    completed_tasks: [], 
+    completed_tasks: [], // Store as strings for consistent comparison
     last_spin: 0 
   });
   
@@ -87,7 +87,13 @@ function App() {
         }]).select().single();
         uData = newUser;
     }
-    setUser(uData);
+    
+    // Ensure completed_tasks are always treated as strings for .includes() to work perfectly
+    const sanitizedUser = {
+        ...uData,
+        completed_tasks: uData.completed_tasks ? uData.completed_tasks.map(String) : []
+    };
+    setUser(sanitizedUser);
     
     const waitTime = 1 * 60 * 60 * 1000; 
     const diff = waitTime - (Date.now() - (uData.last_spin || 0));
@@ -194,24 +200,33 @@ function App() {
     });
   };
 
-  // --- TASK LOGIC (FIXED: AD MUST FINISH FOR REWARD & HIDE) ---
+  // --- TASK LOGIC (REINFORCED FILTERING) ---
   const handleStartTask = (task) => {
-    if (user.completed_tasks?.includes(task.id)) return;
+    const taskIdStr = String(task.id);
+    if (user.completed_tasks?.includes(taskIdStr)) return;
     
     // 1. Open task link immediately
     window.open(task.link, '_blank');
 
     // 2. Trigger Ad. Reward only happens AFTER triggerAd callback executes
     triggerAd(20, async () => { 
-        const currentTasks = user.completed_tasks || [];
+        // Get fresh completed tasks from state
+        const currentTasks = user.completed_tasks ? [...user.completed_tasks] : [];
         
         // Prevent double reward logic
-        if (currentTasks.includes(task.id)) return; 
+        if (currentTasks.includes(taskIdStr)) return; 
 
         const taskReward = 0.001; 
         const newBalance = (user.balance || 0) + taskReward;
-        const updatedCompletedTasks = [...currentTasks, task.id];
+        const updatedCompletedTasks = [...currentTasks, taskIdStr];
         
+        // Update Local State IMMEDIATELY so it disappears from UI
+        setUser(prev => ({ 
+            ...prev, 
+            balance: newBalance, 
+            completed_tasks: updatedCompletedTasks 
+        }));
+
         // Update Supabase
         const { error } = await supabase
           .from('users')
@@ -222,15 +237,8 @@ function App() {
           .eq('id', user.id);
         
         if(!error) {
-          // Update Local UI State: Adds balance and triggers filter to HIDE task
-          setUser(prev => ({ 
-            ...prev, 
-            balance: newBalance, 
-            completed_tasks: updatedCompletedTasks 
-          }));
-          
           alert(`Task Verified! +${taskReward} TON Added ✅`); 
-          setTimeout(() => fetchAllData(), 300);
+          setTimeout(() => fetchAllData(), 500);
         } else {
           alert("Error verifying task. Please try again.");
         }
@@ -380,8 +388,8 @@ function App() {
               }}>ADD TASK</button>
             </div>
           ) : (
-            // TASK FILTER: Tasks are REMOVED from view immediately once balance is added to user.completed_tasks
-            tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(t.id)).map(t => (
+            // TASK FILTER: Strict String comparison and immediate removal
+            tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(String(t.id))).map(t => (
                 <div key={t.id} style={styles.card}>
                   <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                       <span style={{fontWeight:'bold', fontSize:14}}>{t.name}</span>
