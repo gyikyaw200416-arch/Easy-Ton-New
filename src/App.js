@@ -194,23 +194,25 @@ function App() {
     });
   };
 
-  // --- REVISED TASK LOGIC (OPEN BOTH & HIDE ONLY ON SUCCESSFUL REWARD) ---
+  // --- TASK LOGIC (FIXED: AD MUST FINISH FOR REWARD & HIDE) ---
   const handleStartTask = (task) => {
     if (user.completed_tasks?.includes(task.id)) return;
     
-    // ACTION: Opens the Link immediately when START is clicked
+    // 1. Open task link immediately
     window.open(task.link, '_blank');
 
-    // ACTION: Simultaneously triggers the Ad
+    // 2. Trigger Ad. Reward only happens AFTER triggerAd callback executes
     triggerAd(20, async () => { 
         const currentTasks = user.completed_tasks || [];
+        
+        // Prevent double reward logic
         if (currentTasks.includes(task.id)) return; 
 
         const taskReward = 0.001; 
-        const newBalance = user.balance + taskReward;
+        const newBalance = (user.balance || 0) + taskReward;
         const updatedCompletedTasks = [...currentTasks, task.id];
         
-        // 1. Update Database First
+        // Update Supabase
         const { error } = await supabase
           .from('users')
           .update({ 
@@ -220,7 +222,7 @@ function App() {
           .eq('id', user.id);
         
         if(!error) {
-          // 2. Only if DB update is successful: Update local state to add balance AND hide the task
+          // Update Local UI State: Adds balance and triggers filter to HIDE task
           setUser(prev => ({ 
             ...prev, 
             balance: newBalance, 
@@ -228,12 +230,9 @@ function App() {
           }));
           
           alert(`Task Verified! +${taskReward} TON Added ✅`); 
-          
-          // 3. Refresh global data
-          setTimeout(() => fetchAllData(), 500);
+          setTimeout(() => fetchAllData(), 300);
         } else {
           alert("Error verifying task. Please try again.");
-          console.error(error);
         }
     });
   };
@@ -381,7 +380,7 @@ function App() {
               }}>ADD TASK</button>
             </div>
           ) : (
-            // TASK FILTER: Tasks disappear from screen ONLY when balance is successfully added (completed_tasks list)
+            // TASK FILTER: Tasks are REMOVED from view immediately once balance is added to user.completed_tasks
             tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(t.id)).map(t => (
                 <div key={t.id} style={styles.card}>
                   <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
@@ -405,7 +404,7 @@ function App() {
                <h4>Invite History</h4>
                {invites.map((inv, i) => (
                  <div key={i} style={{fontSize:11, padding:5, borderBottom:'1px solid #eee'}}>
-                    User ID: {inv.id} 
+                    User ID: {inv.id}
                     <b style={{float:'right', color:'green'}}>+0.005 TON Verified ✅</b>
                  </div>
                ))}
@@ -434,10 +433,10 @@ function App() {
           <div>
             <div style={{...styles.card, border: '2px solid gold', background: '#fffcf0'}}>
                 <h4 style={{margin:0, color: '#b8860b'}}>💎 UPGRADE TO VIP (1 TON)</h4>
-                <p style={{fontSize:11, wordBreak:'break-all'}}>UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9 
+                <p style={{fontSize:11, wordBreak:'break-all'}}>UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9
                   <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText('UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9'); alert("Address Copied!");}}>COPY</span>
                 </p>
-                <p style={{fontSize:11}}>Memo: {user.id} 
+                <p style={{fontSize:11}}>Memo: {user.id}
                   <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(user.id); alert("Memo Copied!");}}>COPY</span>
                 </p>
             </div>
