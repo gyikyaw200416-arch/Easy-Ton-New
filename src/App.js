@@ -15,11 +15,13 @@ const AD_LINKS = [
   "https://www.profitablecpmratenetwork.com/pmi0yt9u?key=3580805003ccb6983acba9b61b6cb7e2"
 ];
 
-// --- RANK REWARDS LIST (1 to 30) ---
+// --- UPDATED RANK REWARDS LIST (1 to 50) ---
 const RANK_REWARDS = [
   30, 28, 25, 20, 20, 15, 15, 10, 10, 10, 
   5, 5, 5, 3, 3, 3, 3, 2, 2, 2, 
-  2, 2, 1, 1, 1, 1, 1, 1, 1, 1
+  2, 2, 1, 1, 1, 1, 1, 1, 1, 1,
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 31-40
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1  // 41-50
 ];
 
 function App() {
@@ -122,7 +124,8 @@ function App() {
     const { data: tData } = await supabase.from('global_tasks').select('*');
     if (tData) setTasks(tData);
 
-    const { data: rData } = await supabase.from('users').select('id, balance').order('balance', { ascending: false }).limit(30);
+    // LIMIT INCREASED TO 50
+    const { data: rData } = await supabase.from('users').select('id, balance').order('balance', { ascending: false }).limit(50);
     if (rData) setRankList(rData);
 
     const { data: wData } = await supabase.from('withdrawals').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
@@ -140,7 +143,6 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- AD LOGIC ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     const selectedAd = AD_LINKS[adToggle.current % 2];
@@ -309,7 +311,9 @@ function App() {
     wheel: (rotation, options) => ({ width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${options.map((o, i) => `${o.color} ${i * (360/options.length)}deg ${(i+1) * (360/options.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${rotation}deg)` }),
     dot: (color) => ({ height: 10, width: 10, backgroundColor: color, borderRadius: '50%', display: 'inline-block', marginRight: 5, border: '1px solid #000' }),
     depositBox: { background: '#f8f9fa', padding: '10px', borderRadius: '10px', border: '1px solid #ddd', marginTop: '15px', textAlign: 'left', fontSize: '12px' },
-    rankHeader: { textAlign: 'center', marginBottom: '20px', background: 'linear-gradient(45deg, #FFD700, #FFA500)', padding: '10px', borderRadius: '15px', border: '2px solid #000', color: '#000', fontWeight: '900' }
+    rankHeader: { textAlign: 'center', marginBottom: '10px', background: 'linear-gradient(45deg, #FFD700, #FFA500)', padding: '10px', borderRadius: '15px', border: '2px solid #000', color: '#000', fontWeight: '900' },
+    // NEW SCROLL STYLE
+    rankScrollBox: { maxHeight: '420px', overflowY: 'auto', paddingRight: '5px' }
   };
 
   if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>LOADING...</div>;
@@ -477,49 +481,51 @@ function App() {
           </div>
         )}
 
-        {/* --- UPDATED RANK SECTION --- */}
+        {/* --- UPDATED RANK SECTION FOR 50 USERS --- */}
         {mainTab === 'rank' && (
           <div style={styles.card}>
             <div style={styles.rankHeader}>
-              🏆 TOP 30 LEADERS 🏆
+              🏆 TOP 50 LEADERS 🏆
             </div>
-            <table style={{width:'100%', fontSize:12, borderCollapse:'collapse'}}>
-              <thead>
-                <tr style={{borderBottom:'2px solid #000', color: '#555'}}>
-                  <th align="left" style={{paddingBottom: '10px'}}>RANKING</th>
-                  <th align="left">USER ID</th>
-                  <th align="right">REWARD</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rankList.slice(0, 30).map((r, i) => (
-                  <tr key={i} style={{
-                    borderBottom:'1px solid #eee', 
-                    background: r.id === user.id ? '#fff9c4' : 'none',
-                    height: '40px'
-                  }}>
-                    <td style={{fontWeight: 'bold'}}>
-                      {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '🏆'} {i + 1}
-                    </td>
-                    <td style={{fontFamily: 'monospace'}}>{r.id}</td>
-                    <td align="right">
-                      <span style={{
-                        background: '#000', 
-                        color: '#facc15', 
-                        padding: '3px 8px', 
-                        borderRadius: '8px', 
-                        fontSize: '10px',
-                        fontWeight: 'bold'
-                      }}>
-                        {RANK_REWARDS[i] || 0} TON
-                      </span>
-                    </td>
+            <div style={styles.rankScrollBox}>
+              <table style={{width:'100%', fontSize:12, borderCollapse:'collapse'}}>
+                <thead style={{position: 'sticky', top: 0, background: '#fff', zIndex: 5}}>
+                  <tr style={{borderBottom:'2px solid #000', color: '#555'}}>
+                    <th align="left" style={{paddingBottom: '10px'}}>RANKING</th>
+                    <th align="left">USER ID</th>
+                    <th align="right">REWARD</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {rankList.slice(0, 50).map((r, i) => (
+                    <tr key={i} style={{
+                      borderBottom:'1px solid #eee', 
+                      background: r.id === user.id ? '#fff9c4' : 'none',
+                      height: '45px'
+                    }}>
+                      <td style={{fontWeight: 'bold'}}>
+                        {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i < 10 ? '🏆' : '👤'} {i + 1}
+                      </td>
+                      <td style={{fontFamily: 'monospace'}}>{r.id}</td>
+                      <td align="right">
+                        <span style={{
+                          background: '#000', 
+                          color: '#facc15', 
+                          padding: '4px 8px', 
+                          borderRadius: '8px', 
+                          fontSize: '10px',
+                          fontWeight: 'bold'
+                        }}>
+                          {RANK_REWARDS[i] || 0} TON
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <p style={{fontSize: '9px', textAlign: 'center', marginTop: '15px', color: '#888'}}>
-              * Rewards are distributed based on your final position.
+              * Rewards are distributed based on your final position. Scroll down to see all 50.
             </p>
           </div>
         )}
