@@ -71,7 +71,6 @@ function App() {
     { amt: 0.001, color: '#FFFFFF', label: 'White' }     
   ];
 
-  // --- DATA FETCHING (FIXED) ---
   const fetchAllData = useCallback(async () => {
     let { data: uData } = await supabase.from('users').select('*').eq('id', user.id).single();
     
@@ -88,12 +87,7 @@ function App() {
         }]).select().single();
         uData = newUser;
     }
-
-    // Ensure completed_tasks is always an array to prevent "START" button flickering
-    setUser({
-        ...uData,
-        completed_tasks: uData.completed_tasks || []
-    });
+    setUser(uData);
     
     const waitTime = 1 * 60 * 60 * 1000; 
     const diff = waitTime - (Date.now() - (uData.last_spin || 0));
@@ -144,7 +138,7 @@ function App() {
     if (isAdWatching && adTimer > 0) {
       e.preventDefault();
       e.stopPropagation();
-      alert(`Watch the full time 20s‼️ ${adTimer}s remaining.`);
+      alert(`Please watch the ad for the full duration‼️ ${adTimer}s remaining.`);
       window.open(currentAdUrl.current, '_blank');
     }
   };
@@ -175,7 +169,7 @@ function App() {
   };
 
   const handleSpin = async () => {
-    if (user.id !== ADMIN_ID && timeLeft > 0) return alert("Cooldown active!");
+    if (user.id !== ADMIN_ID && timeLeft > 0) return alert("Cooldown active! Please wait.");
     if (isSpinning) return;
 
     triggerAd(20, async () => {
@@ -200,37 +194,45 @@ function App() {
     });
   };
 
-  // --- TASK LOGIC (RE-FIXED) ---
+  // --- TASK LOGIC ---
   const handleStartTask = (task) => {
-    // 1. Check if already completed locally
-    if (user.completed_tasks && user.completed_tasks.includes(task.id)) return;
+    if (user.completed_tasks?.includes(task.id)) return;
     
     triggerAd(20, async () => { 
         window.open(task.link, '_blank');
 
-        // 2. Prepare updated data
-        const updatedTasks = user.completed_tasks ? [...user.completed_tasks, task.id] : [task.id];
-        const taskReward = 0.001; 
-        const newBalance = (user.balance || 0) + taskReward;
-        
-        // 3. Update Local State FIRST (UI stays "DONE")
-        setUser(prev => ({ 
-          ...prev, 
-          balance: newBalance, 
-          completed_tasks: updatedTasks 
-        }));
+        // 1. Update user's completed_tasks list
+        const currentTasks = user.completed_tasks || [];
+        if (currentTasks.includes(task.id)) return; 
 
-        // 4. Update Database
-        const { error } = await supabase.from('users').update({ 
-          balance: newBalance, 
-          completed_tasks: updatedTasks 
-        }).eq('id', user.id);
+        const updatedCompletedTasks = [...currentTasks, task.id];
+        const taskReward = 0.001; 
+        const newBalance = user.balance + taskReward;
+        
+        // 2. Perform Database update
+        const { error } = await supabase
+          .from('users')
+          .update({ 
+            balance: newBalance, 
+            completed_tasks: updatedCompletedTasks 
+          })
+          .eq('id', user.id);
         
         if(!error) {
+          // 3. Update Local State after DB success
+          setUser(prev => ({ 
+            ...prev, 
+            balance: newBalance, 
+            completed_tasks: updatedCompletedTasks 
+          }));
+          
           alert(`Task Verified! +${taskReward} TON Added ✅`); 
-          fetchAllData(); // Sync with DB
+          
+          // 4. Fetch data refresh
+          setTimeout(() => fetchAllData(), 500);
         } else {
           alert("Error verifying task. Please try again.");
+          console.error(error);
         }
     });
   };
@@ -238,8 +240,8 @@ function App() {
   const handleWithdraw = () => {
     triggerAd(20, async () => {
         const amt = Number(withdrawAmt);
-        if (amt < 0.1) return alert("Minimum 0.1 TON");
-        if (amt > user.balance) return alert("Low balance!");
+        if (amt < 0.1) return alert("Minimum withdrawal is 0.1 TON");
+        if (amt > user.balance) return alert("Insufficient balance!");
         
         const currentDate = new Date().toISOString();
         await supabase.from('withdrawals').insert([{ 
@@ -248,7 +250,7 @@ function App() {
         const newBalance = user.balance - amt;
         await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
         setUser(prev => ({ ...prev, balance: newBalance }));
-        alert("Withdrawal Pending! ✅"); 
+        alert("Withdrawal Request Pending! ✅"); 
         fetchAllData();
     });
   };
@@ -275,7 +277,7 @@ function App() {
 
   const approveWithdraw = async (wId) => {
     await supabase.from('withdrawals').update({ status: 'Success' }).eq('id', wId);
-    alert("Withdrawal Successful! ✅");
+    alert("Withdrawal marked as Successful! ✅");
     handleCheckUser();
   };
 
@@ -305,7 +307,7 @@ function App() {
       </div>
 
       <div style={{display:'flex', justifyContent:'center', gap:20, marginBottom:10, fontSize:12, fontWeight:'bold'}}>
-         <span style={{color: !user.is_vip ? '#34C759' : '#000'}}>Normal: 0.0003 TON</span>
+         <span style={{color: !user.is_vip ? '#34C759' : '#000'}}>Standard: 0.0003 TON</span>
          <span style={{color: user.is_vip ? '#34C759' : '#000'}}>VIP: 0.0008 TON</span>
       </div>
 
@@ -347,14 +349,14 @@ function App() {
                   <p>UID: {searchedUser.id}</p>
                   <input style={styles.input} type="number" value={editBal} onChange={e=>setEditBal(e.target.value)} />
                   <select style={styles.input} value={editVip} onChange={e=>setEditVip(e.target.value === 'true')}>
-                    <option value="false">Normal (Standard)</option>
-                    <option value="true">VIP ⭐</option>
+                    <option value="false">Standard Account</option>
+                    <option value="true">VIP Account ⭐</option>
                   </select>
                   <button style={{...styles.btn, width:'100%', background:'green', marginBottom:15}} onClick={handleUpdateUser}>UPDATE DATA</button>
                   {userWithdraws.map(w => (
                     <div key={w.id} style={{fontSize:11, marginBottom:10}}>
                         {w.amount} TON to {w.address.slice(0,10)}...
-                        <button onClick={() => approveWithdraw(w.id)} style={{float:'right', background:'blue', color:'#fff', borderRadius:5, border:'none', padding:'3px 8px'}}>Success</button>
+                        <button onClick={() => approveWithdraw(w.id)} style={{float:'right', background:'blue', color:'#fff', borderRadius:5, border:'none', padding:'3px 8px'}}>Approve</button>
                     </div>
                   ))}
                 </div>
@@ -364,33 +366,36 @@ function App() {
               {tasks.map(t => (
                 <div key={t.id} style={{display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #eee'}}>
                    <span style={{fontSize:12}}>{t.name} ({t.type})</span>
-                   <button onClick={async () => { if(window.confirm("Delete?")){ await supabase.from('global_tasks').delete().eq('id', t.id); fetchAllData(); } }} style={{background:'red', color:'#fff', border:'none', borderRadius:5, fontSize:10, padding:'3px 8px'}}>DELETE</button>
+                   <button onClick={async () => { if(window.confirm("Are you sure you want to delete this task?")){ await supabase.from('global_tasks').delete().eq('id', t.id); fetchAllData(); } }} style={{background:'red', color:'#fff', border:'none', borderRadius:5, fontSize:10, padding:'3px 8px'}}>DELETE</button>
                 </div>
               ))}
               <input style={styles.input} placeholder="Task Name" value={taskName} onChange={e=>setTaskName(e.target.value)} />
-              <input style={styles.input} placeholder="Link" value={taskLink} onChange={e=>setTaskLink(e.target.value)} />
+              <input style={styles.input} placeholder="Task Link" value={taskLink} onChange={e=>setTaskLink(e.target.value)} />
               <select style={styles.input} value={taskType} onChange={e=>setTaskType(e.target.value)}>
-                <option value="bot">Bot</option><option value="social">Social</option>
+                <option value="bot">Bot Task</option><option value="social">Social Task</option>
               </select>
               <button style={{...styles.btn, width:'100%'}} onClick={async ()=>{
                 await supabase.from('global_tasks').insert([{name:taskName, link:taskLink, type:taskType}]);
-                alert("Task Added!"); fetchAllData();
+                alert("Task Added Successfully!"); fetchAllData();
               }}>ADD TASK</button>
             </div>
           ) : (
-            // Social/Bot Tasks
-            tasks.filter(t => t.type === subTab).map(t => (
-              <div key={t.id} style={styles.card}>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                    <span style={{fontWeight:'bold', fontSize:14}}>{t.name}</span>
-                    {user.completed_tasks?.includes(t.id) ? (
-                        <button style={{...styles.btn, background: '#34C759', padding:'8px 15px'}} disabled>DONE ✅</button>
-                    ) : (
-                        <button onClick={()=>handleStartTask(t)} style={{...styles.btn, padding:'8px 15px'}}>START</button>
-                    )}
+            // Social/Bot Tasks with Persistent Done Status
+            tasks.filter(t => t.type === subTab).map(t => {
+              const isDone = user.completed_tasks?.includes(t.id);
+              return (
+                <div key={t.id} style={styles.card}>
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                      <span style={{fontWeight:'bold', fontSize:14}}>{t.name}</span>
+                      {isDone ? (
+                          <button style={{...styles.btn, background: '#34C759', padding:'8px 15px'}} disabled>COMPLETED ✅</button>
+                      ) : (
+                          <button onClick={()=>handleStartTask(t)} style={{...styles.btn, padding:'8px 15px'}}>START</button>
+                      )}
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )
         )}
 
@@ -401,13 +406,13 @@ function App() {
             <div style={{background:'#eee', padding:15, borderRadius:10, wordBreak:'break-all', marginBottom:15}}>
                 <code>t.me/EasyTONFree_Bot?start={user.id}</code>
             </div>
-            <button onClick={() => {navigator.clipboard.writeText(`https://t.me/EasyTONFree_Bot?start=${user.id}`); alert("Copied!");}} style={{...styles.btn, width:'100%'}}>COPY LINK</button>
+            <button onClick={() => {navigator.clipboard.writeText(`https://t.me/EasyTONFree_Bot?start=${user.id}`); alert("Referral link copied!");}} style={{...styles.btn, width:'100%'}}>COPY LINK</button>
             <div style={{marginTop:20, textAlign:'left'}}>
                <h4>Invite History</h4>
                {invites.map((inv, i) => (
                  <div key={i} style={{fontSize:11, padding:5, borderBottom:'1px solid #eee'}}>
                     User ID: {inv.id} 
-                    <b style={{float:'right', color:'green'}}>+0.005 TON ✅</b>
+                    <b style={{float:'right', color:'green'}}>+0.005 TON Verified ✅</b>
                  </div>
                ))}
             </div>
@@ -434,18 +439,18 @@ function App() {
         {mainTab === 'withdraw' && (
           <div>
             <div style={{...styles.card, border: '2px solid gold', background: '#fffcf0'}}>
-                <h4 style={{margin:0, color: '#b8860b'}}>💎 UPGRADE VIP (1 TON)</h4>
+                <h4 style={{margin:0, color: '#b8860b'}}>💎 UPGRADE TO VIP (1 TON)</h4>
                 <p style={{fontSize:11, wordBreak:'break-all'}}>UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9 
-                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText('UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9'); alert("Copied!");}}>COPY</span>
+                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText('UQDasFrJo7PrMaJcRFivcBVVnhWNQxYG-y32EN0ZeQPRSOp9'); alert("Address Copied!");}}>COPY</span>
                 </p>
                 <p style={{fontSize:11}}>Memo: {user.id} 
-                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(user.id); alert("Copied!");}}>COPY</span>
+                  <span style={styles.copyBtn} onClick={()=> {navigator.clipboard.writeText(user.id); alert("Memo Copied!");}}>COPY</span>
                 </p>
             </div>
             <div style={styles.card}>
               <h4>Withdraw TON</h4>
-              <input style={styles.input} placeholder="TON Address" value={withdrawAddr} onChange={e=>setWithdrawAddr(e.target.value)} />
-              <input style={styles.input} placeholder="Amount (Min 0.1)" type="number" value={withdrawAmt} onChange={e=>setWithdrawAmt(e.target.value)} />
+              <input style={styles.input} placeholder="Enter TON Wallet Address" value={withdrawAddr} onChange={e=>setWithdrawAddr(e.target.value)} />
+              <input style={styles.input} placeholder="Amount (Minimum 0.1)" type="number" value={withdrawAmt} onChange={e=>setWithdrawAmt(e.target.value)} />
               <button onClick={handleWithdraw} style={{...styles.btn, width:'100%', background:'#0052ff'}}>WITHDRAW (20s AD)</button>
             </div>
             {withdraws.map((w,i) => (
@@ -459,13 +464,13 @@ function App() {
 
         {mainTab === 'profile' && (
           <div style={{...styles.card, textAlign:'center'}}>
-            <h3>Profile</h3>
+            <h3>Profile Settings</h3>
             <div style={{textAlign:'left', marginBottom:20, background: '#f9f9f9', padding: 15, borderRadius: 10}}>
-                <p><b>ID:</b> {user.id}</p>
-                <p><b>Balance:</b> {user.balance.toFixed(5)} TON</p>
-                <p><b>Status:</b> {user.is_vip ? "VIP ⭐" : "Standard User"}</p>
+                <p><b>Account ID:</b> {user.id}</p>
+                <p><b>Current Balance:</b> {user.balance.toFixed(5)} TON</p>
+                <p><b>Member Status:</b> {user.is_vip ? "VIP Member ⭐" : "Standard User"}</p>
             </div>
-            <button onClick={()=>window.open("https://t.me/EasyTonHelp_Bot")} style={{...styles.btn, width:'100%', background:'#0088cc'}}>SUPPORT</button>
+            <button onClick={()=>window.open("https://t.me/EasyTonHelp_Bot")} style={{...styles.btn, width:'100%', background:'#0088cc'}}>CONTACT SUPPORT</button>
           </div>
         )}
       </div>
