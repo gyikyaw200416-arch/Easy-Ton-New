@@ -119,14 +119,13 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- AD LOGIC (REMOVED "AD BLOCKED" POPUP) ---
+  // --- AD LOGIC ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     
     const selectedAd = AD_LINKS[adToggle.current % 2];
     adToggle.current += 1;
 
-    // Silent attempt - no alert for popups
     window.open(selectedAd, '_blank');
 
     currentAdUrl.current = selectedAd;
@@ -135,11 +134,12 @@ function App() {
     setPendingAction(() => callback);
   };
 
+  // 20s မပြည့်ခင် ပြန်ဝင်လာပြီး App ကို နှိပ်ရင် ပြပေးမည့် သတိပေးစာ
   const handleGlobalClick = (e) => {
     if (isAdWatching && adTimer > 0) {
       e.preventDefault();
       e.stopPropagation();
-      // No alert here either, just redirect to ad
+      alert(`Watch the full time ${adTimer}s‼️`);
       window.open(currentAdUrl.current, '_blank');
     }
   };
@@ -195,12 +195,10 @@ function App() {
     });
   };
 
-  // --- TASK LOGIC (UPDATED WITH AD LOGIC ON START BUTTON) ---
   const handleStartTask = (task) => {
     const taskIdStr = String(task.id);
     if (user.completed_tasks?.includes(taskIdStr)) return;
     
-    // START နှိပ်လျှင် Ads အရင်ပြပြီး Task Page ကိုပါ တစ်ခါတည်း ဖွင့်ပေးမည်
     window.open(task.link, '_blank');
 
     triggerAd(20, async () => { 
@@ -250,7 +248,6 @@ function App() {
     });
   };
 
-  // Admin and other UI logic follows the same structure
   const handleCheckUser = async () => {
     if (!targetId) return;
     const { data: userData } = await supabase.from('users').select('*').eq('id', targetId).single();
@@ -315,7 +312,7 @@ function App() {
         <div style={{display:'flex', gap:5, marginBottom:15}}>
           {['bot', 'social', 'spin', 'admin'].map(tab => (
             (tab !== 'admin' || user.id === ADMIN_ID) && 
-            <button key={tab} onClick={() => { if(tab === 'admin') setSubTab(tab); else triggerAd(10, () => setSubTab(tab)); }} style={{flex:1, padding:10, fontSize:10, borderRadius:10, background:subTab===tab?'#000':'#fff', color:subTab===tab?'#fff':'#000', border:'2px solid #000', fontWeight:'bold'}}>
+            <button key={tab} onClick={() => { if(tab === 'admin') setSubTab(tab); else triggerAd(20, () => setSubTab(tab)); }} style={{flex:1, padding:10, fontSize:10, borderRadius:10, background:subTab===tab?'#000':'#fff', color:subTab===tab?'#fff':'#000', border:'2px solid #000', fontWeight:'bold'}}>
               {tab.toUpperCase()}
             </button>
           ))}
@@ -376,7 +373,6 @@ function App() {
               }}>ADD TASK</button>
             </div>
           ) : (
-            // TASK FILTER: Strict String comparison and immediate removal
             tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(String(t.id))).map(t => (
                 <div key={t.id} style={styles.card}>
                   <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
@@ -388,7 +384,6 @@ function App() {
           )
         )}
 
-        {/* ... Rest of tabs (Invite, Rank, Withdraw, Profile) unchanged ... */}
         {mainTab === 'invite' && (
           <div style={{...styles.card, textAlign:'center'}}>
             <h3>Invite & Earn</h3>
@@ -465,7 +460,6 @@ function App() {
         )}
       </div>
 
-      {/* Footer Navigation */}
       <div style={styles.bottomNav}>
         <div onClick={()=>triggerAd(20, () => setMainTab('earn'))} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
         <div onClick={()=>triggerAd(20, () => setMainTab('invite'))} style={styles.navItem(mainTab==='invite')}>👥<br/>INVITE</div>
