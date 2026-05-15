@@ -48,7 +48,7 @@ function App() {
   const [taskLink, setTaskLink] = useState('');
   const [taskType, setTaskType] = useState('bot');
 
-  // --- AD ENGINE STATES ---
+  // --- AD ENGINE ---
   const [isAdWatching, setIsAdWatching] = useState(false);
   const [adTimer, setAdTimer] = useState(0);
   const [pendingAction, setPendingAction] = useState(null);
@@ -72,7 +72,6 @@ function App() {
   ];
 
   const fetchAllData = useCallback(async (isSilent = false) => {
-    // isSilent prevents the "LOADING..." screen from appearing during background updates
     if (!isSilent) setLoading(true);
 
     let { data: uData } = await supabase.from('users').select('*').eq('id', user.id).single();
@@ -117,13 +116,11 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- AD LOGIC ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     
     const selectedAd = AD_LINKS[adToggle.current % 2];
     adToggle.current += 1;
-
     const adWindow = window.open(selectedAd, '_blank');
 
     if (!adWindow || adWindow.closed || typeof adWindow.closed === 'undefined') {
@@ -167,7 +164,7 @@ function App() {
       await supabase.from('users').update({ balance: newBalance }).eq('id', user.id);
       setUser(prev => ({ ...prev, balance: newBalance }));
       alert(`Ad complete! Reward: +${reward} TON ✅`);
-      fetchAllData(true); // Silent update
+      fetchAllData(true); 
     });
   };
 
@@ -179,9 +176,8 @@ function App() {
         setIsSpinning(true);
         const randomIndex = Math.floor(Math.random() * spinOptions.length);
         const segmentAngle = 360 / spinOptions.length;
-        const extraSpins = 3600; 
         const currentRotationBase = spinRotation - (spinRotation % 360);
-        const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle));
+        const finalRotation = currentRotationBase + 3600 + (360 - (randomIndex * segmentAngle));
         setSpinRotation(finalRotation);
 
         setTimeout(async () => {
@@ -192,12 +188,12 @@ function App() {
           setUser(prev => ({ ...prev, balance: newBalance, last_spin: now }));
           alert(`Landed on ${winner.label}! +${winner.amt} TON ✅`);
           setIsSpinning(false);
-          fetchAllData(true); // Silent update
+          fetchAllData(true);
         }, 4000);
     });
   };
 
-  // --- UPDATED TASK LOGIC: FIXING "START OVER" ISSUE ---
+  // --- REVISED TASK LOGIC (HIDE ON DONE) ---
   const handleStartTask = (task) => {
     if (user.completed_tasks?.includes(task.id)) return;
     
@@ -205,34 +201,28 @@ function App() {
         window.open(task.link, '_blank');
 
         const currentTasks = user.completed_tasks || [];
-        if (currentTasks.includes(task.id)) return; 
-
         const updatedCompletedTasks = [...currentTasks, task.id];
         const taskReward = 0.001; 
         const newBalance = user.balance + taskReward;
         
-        // STEP 1: Update UI State Immediately (No reload, shows DONE right away)
+        // 1. Update user state locally first (This hides the task immediately)
         setUser(prev => ({ 
           ...prev, 
           balance: newBalance, 
           completed_tasks: updatedCompletedTasks 
         }));
 
-        // STEP 2: Update Database in the background
+        // 2. Perform Database update
         const { error } = await supabase
           .from('users')
-          .update({ 
-            balance: newBalance, 
-            completed_tasks: updatedCompletedTasks 
-          })
+          .update({ balance: newBalance, completed_tasks: updatedCompletedTasks })
           .eq('id', user.id);
         
         if(!error) {
           alert(`Task Verified! +${taskReward} TON Added ✅`); 
-          // fetchAllData(true) updates rankings/invites without showing "LOADING..."
-          fetchAllData(true); 
+          fetchAllData(true); // Silent refresh
         } else {
-          alert("Sync error. Refreshing data...");
+          alert("Error verifying task. Please try again.");
           fetchAllData();
         }
     });
@@ -296,12 +286,11 @@ function App() {
     dot: (color) => ({ height: 10, width: 10, backgroundColor: color, borderRadius: '50%', display: 'inline-block', marginRight: 5, border: '1px solid #000' })
   };
 
-  if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold', color: '#000'}}>LOADING DATA...</div>;
+  if (loading) return <div style={{textAlign:'center', marginTop:50, fontWeight:'bold'}}>LOADING...</div>;
 
   return (
     <div style={styles.container} onClick={handleGlobalClick}>
       
-      {/* Balance Header */}
       <div style={{background:'#000', color:'#fff', padding:20, borderRadius:20, textAlign:'center', marginBottom:15, border: '2px solid #fff'}}>
          <small style={{opacity:0.7}}>MY TOTAL BALANCE</small>
          <h1 style={{margin:'5px 0', fontSize:32}}>{user.balance.toFixed(5)} TON</h1>
@@ -317,7 +306,6 @@ function App() {
         📺 WATCH ADS & EARN (30s)
       </button>
 
-      {/* Sub-Tabs for Earn Section */}
       {mainTab === 'earn' && (
         <div style={{display:'flex', gap:5, marginBottom:15}}>
           {['bot', 'social', 'spin', 'admin'].map(tab => (
@@ -383,26 +371,18 @@ function App() {
               }}>ADD TASK</button>
             </div>
           ) : (
-            // Tasks Section (Bot & Social)
-            tasks.filter(t => t.type === subTab).map(t => {
-              const isDone = user.completed_tasks?.includes(t.id);
-              return (
-                <div key={t.id} style={styles.card}>
-                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                      <span style={{fontWeight:'bold', fontSize:14}}>{t.name}</span>
-                      {isDone ? (
-                          <button style={{...styles.btn, background: '#34C759', padding:'8px 15px'}} disabled>COMPLETED ✅</button>
-                      ) : (
-                          <button onClick={()=>handleStartTask(t)} style={{...styles.btn, padding:'8px 15px'}}>START</button>
-                      )}
-                  </div>
+            // TASK LIST: AUTOMATICALLY FILTER OUT COMPLETED TASKS
+            tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(t.id)).map(t => (
+              <div key={t.id} style={styles.card}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                    <span style={{fontWeight:'bold', fontSize:14}}>{t.name}</span>
+                    <button onClick={()=>handleStartTask(t)} style={{...styles.btn, padding:'8px 15px'}}>START</button>
                 </div>
-              );
-            })
+              </div>
+            ))
           )
         )}
 
-        {/* Other Main Tabs (Invite, Rank, etc.) remain unchanged */}
         {mainTab === 'invite' && (
           <div style={{...styles.card, textAlign:'center'}}>
             <h3>Invite & Earn</h3>
