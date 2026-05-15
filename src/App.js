@@ -9,7 +9,6 @@ const supabase = createClient(
 );
 const ADMIN_ID = "1793453606"; 
 
-// Alternating Ad Links
 const AD_LINKS = [
   "https://data527.click/a674e1237b7e268eb5f6/ff9984d88d/?placementName=default",
   "https://www.profitablecpmratenetwork.com/pmi0yt9u?key=3580805003ccb6983acba9b61b6cb7e2"
@@ -139,7 +138,6 @@ function App() {
     if (isAdWatching && adTimer > 0) {
       e.preventDefault();
       e.stopPropagation();
-      // စာသားကို ဒီနေရာမှာ ပြင်ထားပါတယ်
       alert(`Watch the full time 20s‼️ ${adTimer}s remaining.`);
       window.open(currentAdUrl.current, '_blank');
     }
@@ -196,27 +194,36 @@ function App() {
     });
   };
 
+  // --- TASK LOGIC (FIXED FOR 'DONE' STATUS) ---
   const handleStartTask = (task) => {
     if (user.completed_tasks?.includes(task.id)) return;
     
     triggerAd(20, async () => { 
         window.open(task.link, '_blank');
 
-        // State ကို ချက်ချင်း update လုပ်ဖို့အတွက် Array သစ်ဆောက်မယ်
-        const updatedTasks = [...(user.completed_tasks || []), task.id];
+        // ၁။ User ရဲ့ completed_tasks array အသစ်ကို local မှာ အရင်ပြင်မယ်
+        const updatedCompletedTasks = [...(user.completed_tasks || []), task.id];
         const taskReward = 0.001; 
         const newBalance = user.balance + taskReward;
         
+        // ၂။ Database ကို update လုပ်မယ်
         const { error } = await supabase.from('users').update({ 
           balance: newBalance, 
-          completed_tasks: updatedTasks 
+          completed_tasks: updatedCompletedTasks 
         }).eq('id', user.id);
         
         if(!error) {
-          // အရေးကြီးဆုံးအချက်: setUser ကို ခေါ်မှ START ကနေ DONE ချက်ချင်းပြောင်းမှာပါ
-          setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedTasks }));
+          // ၃။ Local state ကိုပါ update လုပ်လိုက်တဲ့အတွက် UI မှာ ခလုတ်က ချက်ချင်း DONE ဖြစ်သွားမယ်
+          setUser(prev => ({ 
+            ...prev, 
+            balance: newBalance, 
+            completed_tasks: updatedCompletedTasks 
+          }));
           alert(`Task Verified! +${taskReward} TON Added ✅`); 
+          // ၄။ Database နဲ့ data တိုက်ဆိုင်စစ်ဆေးဖို့ ပြန်ခေါ်မယ်
           fetchAllData();
+        } else {
+          alert("Error verifying task. Please try again.");
         }
     });
   };
@@ -239,7 +246,6 @@ function App() {
     });
   };
 
-  // --- ADMIN HANDLERS ---
   const handleCheckUser = async () => {
     if (!targetId) return;
     const { data: userData } = await supabase.from('users').select('*').eq('id', targetId).single();
