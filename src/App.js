@@ -21,7 +21,7 @@ function App() {
     id: tg?.initDataUnsafe?.user?.id?.toString() || "1793453606", 
     balance: 0, 
     is_vip: false, 
-    completed_tasks: [], // Store as strings for consistent comparison
+    completed_tasks: [], 
     last_spin: 0 
   });
   
@@ -88,7 +88,6 @@ function App() {
         uData = newUser;
     }
     
-    // Ensure completed_tasks are always treated as strings for .includes() to work perfectly
     const sanitizedUser = {
         ...uData,
         completed_tasks: uData.completed_tasks ? uData.completed_tasks.map(String) : []
@@ -120,19 +119,15 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- AD LOGIC ---
+  // --- AD LOGIC (REMOVED "AD BLOCKED" POPUP) ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
     
     const selectedAd = AD_LINKS[adToggle.current % 2];
     adToggle.current += 1;
 
-    const adWindow = window.open(selectedAd, '_blank');
-
-    if (!adWindow || adWindow.closed || typeof adWindow.closed === 'undefined') {
-        alert("AD BLOCKED! ‼️\nPlease allow pop-ups for this site to earn rewards.");
-        return; 
-    }
+    // Silent attempt - no alert for popups
+    window.open(selectedAd, '_blank');
 
     currentAdUrl.current = selectedAd;
     setIsAdWatching(true);
@@ -144,7 +139,7 @@ function App() {
     if (isAdWatching && adTimer > 0) {
       e.preventDefault();
       e.stopPropagation();
-      alert(`Please watch the ad for the full duration‼️ ${adTimer}s remaining.`);
+      // No alert here either, just redirect to ad
       window.open(currentAdUrl.current, '_blank');
     }
   };
@@ -200,34 +195,28 @@ function App() {
     });
   };
 
-  // --- TASK LOGIC (REINFORCED FILTERING) ---
+  // --- TASK LOGIC (UPDATED WITH AD LOGIC ON START BUTTON) ---
   const handleStartTask = (task) => {
     const taskIdStr = String(task.id);
     if (user.completed_tasks?.includes(taskIdStr)) return;
     
-    // 1. Open task link immediately
+    // START နှိပ်လျှင် Ads အရင်ပြပြီး Task Page ကိုပါ တစ်ခါတည်း ဖွင့်ပေးမည်
     window.open(task.link, '_blank');
 
-    // 2. Trigger Ad. Reward only happens AFTER triggerAd callback executes
     triggerAd(20, async () => { 
-        // Get fresh completed tasks from state
         const currentTasks = user.completed_tasks ? [...user.completed_tasks] : [];
-        
-        // Prevent double reward logic
         if (currentTasks.includes(taskIdStr)) return; 
 
         const taskReward = 0.001; 
         const newBalance = (user.balance || 0) + taskReward;
         const updatedCompletedTasks = [...currentTasks, taskIdStr];
         
-        // Update Local State IMMEDIATELY so it disappears from UI
         setUser(prev => ({ 
             ...prev, 
             balance: newBalance, 
             completed_tasks: updatedCompletedTasks 
         }));
 
-        // Update Supabase
         const { error } = await supabase
           .from('users')
           .update({ 
@@ -239,8 +228,6 @@ function App() {
         if(!error) {
           alert(`Task Verified! +${taskReward} TON Added ✅`); 
           setTimeout(() => fetchAllData(), 500);
-        } else {
-          alert("Error verifying task. Please try again.");
         }
     });
   };
@@ -263,6 +250,7 @@ function App() {
     });
   };
 
+  // Admin and other UI logic follows the same structure
   const handleCheckUser = async () => {
     if (!targetId) return;
     const { data: userData } = await supabase.from('users').select('*').eq('id', targetId).single();
@@ -400,6 +388,7 @@ function App() {
           )
         )}
 
+        {/* ... Rest of tabs (Invite, Rank, Withdraw, Profile) unchanged ... */}
         {mainTab === 'invite' && (
           <div style={{...styles.card, textAlign:'center'}}>
             <h3>Invite & Earn</h3>
