@@ -194,21 +194,23 @@ function App() {
     });
   };
 
+  // --- REVISED TASK LOGIC (OPEN BOTH & HIDE ONLY ON SUCCESSFUL REWARD) ---
   const handleStartTask = (task) => {
     if (user.completed_tasks?.includes(task.id)) return;
     
-    // Logic: Opens Link and Ad simultaneously
+    // ACTION: Opens the Link immediately when START is clicked
     window.open(task.link, '_blank');
 
+    // ACTION: Simultaneously triggers the Ad
     triggerAd(20, async () => { 
         const currentTasks = user.completed_tasks || [];
         if (currentTasks.includes(task.id)) return; 
 
-        const updatedCompletedTasks = [...currentTasks, task.id];
         const taskReward = 0.001; 
         const newBalance = user.balance + taskReward;
+        const updatedCompletedTasks = [...currentTasks, task.id];
         
-        // Database Update
+        // 1. Update Database First
         const { error } = await supabase
           .from('users')
           .update({ 
@@ -218,7 +220,7 @@ function App() {
           .eq('id', user.id);
         
         if(!error) {
-          // Update local state and hide from UI
+          // 2. Only if DB update is successful: Update local state to add balance AND hide the task
           setUser(prev => ({ 
             ...prev, 
             balance: newBalance, 
@@ -227,7 +229,7 @@ function App() {
           
           alert(`Task Verified! +${taskReward} TON Added ✅`); 
           
-          // Data Refresh
+          // 3. Refresh global data
           setTimeout(() => fetchAllData(), 500);
         } else {
           alert("Error verifying task. Please try again.");
@@ -379,7 +381,7 @@ function App() {
               }}>ADD TASK</button>
             </div>
           ) : (
-            // TASK FILTER: Hides tasks after balance is added
+            // TASK FILTER: Tasks disappear from screen ONLY when balance is successfully added (completed_tasks list)
             tasks.filter(t => t.type === subTab && !user.completed_tasks?.includes(t.id)).map(t => (
                 <div key={t.id} style={styles.card}>
                   <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
