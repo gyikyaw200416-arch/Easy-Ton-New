@@ -36,14 +36,12 @@ function App() {
   const [withdrawAddr, setWithdrawAddr] = useState('');
   const [withdrawAmt, setWithdrawAmt] = useState('');
   
-  // Spin States
   const [isSpinning, setIsSpinning] = useState(false);
   const [readyToSpin, setReadyToSpin] = useState(null); 
   const [spinRotation, setSpinRotation] = useState(0); 
   const [vipSpinRotation, setVipSpinRotation] = useState(0); 
   const [timeLeft, setTimeLeft] = useState(0);
 
-  // Admin States
   const [targetId, setTargetId] = useState('');
   const [searchedUser, setSearchedUser] = useState(null);
   const [userWithdraws, setUserWithdraws] = useState([]);
@@ -54,7 +52,6 @@ function App() {
   const [taskLink, setTaskLink] = useState('');
   const [taskType, setTaskType] = useState('bot');
 
-  // --- AD ENGINE STATES ---
   const [isAdWatching, setIsAdWatching] = useState(false);
   const [adTimer, setAdTimer] = useState(0);
   const [pendingAction, setPendingAction] = useState(null);
@@ -203,11 +200,13 @@ function App() {
     const randomIndex = Math.floor(Math.random() * options.length);
     const segmentAngle = 360 / options.length;
     const extraSpins = 3600; 
+    
     const currentRot = type === 'vip' ? vipSpinRotation : spinRotation;
     const currentRotationBase = currentRot - (currentRot % 360);
-
-    // မြှားတံက ညာဘက် (90deg/270deg point) မှာရှိလို့ တွက်ချက်မှုကို ညှိထားပါတယ်
-    const finalRotation = currentRotationBase + extraSpins + (270 - (randomIndex * segmentAngle));
+    
+    // Adjusted rotation logic: Since arrow is at the TOP (0 deg), 
+    // we rotate to bring the index segment to the top.
+    const finalRotation = currentRotationBase + extraSpins + (360 - (randomIndex * segmentAngle));
     
     if(type === 'vip') setVipSpinRotation(finalRotation);
     else setSpinRotation(finalRotation);
@@ -224,7 +223,7 @@ function App() {
       await supabase.from('users').update(updateData).eq('id', user.id);
       setUser(prev => ({ ...prev, ...updateData }));
       
-      alert(`Landed on ${winner.label}! +${winner.amt} TON ✅`);
+      alert(`Landed on ${winner.label}! +${winner.amt} TON Added to balance ✅`);
       setIsSpinning(false);
       fetchAllData();
     }, 4000);
@@ -297,19 +296,27 @@ function App() {
     bottomNav: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#000', display: 'flex', justifyContent: 'space-around', padding: '10px', zIndex: 100 },
     navItem: (active) => ({ color: active ? '#facc15' : '#fff', textAlign: 'center', fontSize: '11px', fontWeight: 'bold', flex: 1, cursor: 'pointer' }),
     copyBtn: { background: '#eee', border: '1px solid #000', fontSize: '10px', padding: '4px 8px', marginLeft: '5px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' },
-    wheelWrapper: { position: 'relative', width: 220, height: 220, margin: '20px auto' },
+    wheelWrapper: { position: 'relative', width: 220, height: 220, margin: '30px auto' }, // Added margin for arrow
     wheelArrow: { 
         position: 'absolute', 
-        top: '50%', 
-        right: -25, // ပုံထဲကအတိုင်း ညာဘက်သို့ ရွှေ့ထားသည်
-        transform: 'translateY(-50%) rotate(90deg)', // မြှားခေါင်းကို ဘယ်ဘက်သို့ လှည့်ထားသည်
+        top: -20, // Positioned at top center
+        left: '50%', 
+        transform: 'translateX(-50%)', 
         width: 0, height: 0, 
         borderLeft: '15px solid transparent', 
         borderRight: '15px solid transparent', 
-        borderTop: '30px solid #000', 
+        borderTop: '30px solid #000', // Pointing down
         zIndex: 10 
     },
-    wheel: (rotation, options) => ({ width: '100%', height: '100%', borderRadius: '50%', border: '5px solid #000', background: `conic-gradient(${options.map((o, i) => `${o.color} ${i * (360/options.length)}deg ${(i+1) * (360/options.length)}deg`).join(', ')})`, transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', transform: `rotate(${rotation}deg)` }),
+    wheel: (rotation, options) => ({ 
+        width: '100%', 
+        height: '100%', 
+        borderRadius: '50%', 
+        border: '5px solid #000', 
+        background: `conic-gradient(${options.map((o, i) => `${o.color} ${i * (360/options.length)}deg ${(i+1) * (360/options.length)}deg`).join(', ')})`, 
+        transition: 'transform 4s cubic-bezier(0.15, 0, 0.15, 1)', 
+        transform: `rotate(${rotation}deg)` 
+    }),
     dot: (color) => ({ height: 10, width: 10, backgroundColor: color, borderRadius: '50%', display: 'inline-block', marginRight: 5, border: '1px solid #000' }),
     depositBox: { background: '#f8f9fa', padding: '10px', borderRadius: '10px', border: '1px solid #ddd', marginTop: '15px', textAlign: 'left', fontSize: '12px' }
   };
