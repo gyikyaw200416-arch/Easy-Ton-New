@@ -200,13 +200,6 @@ function App() {
   const startSpinExecution = async () => {
     if (!readyToSpin || isSpinning) return;
     const type = readyToSpin;
-    
-    if (type === 'vip' && user.balance < 0.1) {
-      alert("Insufficient balance! You need 0.1 TON for a VIP spin.");
-      setReadyToSpin(null);
-      return;
-    }
-
     setIsSpinning(true);
     setReadyToSpin(null);
 
@@ -246,29 +239,28 @@ function App() {
     }, 4000);
   };
 
-  // --- Fixed Anti-Cheat Task System (Ad First, Link Later) ---
+  // --- REWORKED anti-cheat task function ---
   const handleStartTask = (task) => {
     const taskIdStr = String(task.id);
     if (user.completed_tasks?.includes(taskIdStr)) return;
 
-    // အဆင့် (၁) - အရင်ဆုံး Ad Link တစ်ခုတည်းကိုပဲ ပွင့်အောင်လုပ်ပြီး ကြည့်ခိုင်းမယ် (Popup Blocker ကျော်ရန်)
-    triggerAd(20, async () => {
-      // အဆင့် (၂) - Ad ၂၀ စက္ကန့်ပြည့်သွားပြီဆိုမှ တကယ့် Task Link ကို ပွင့်စေမယ်
-      window.open(task.link, '_blank');
+    // Step 1: Force Ad window execution instantly to maintain system monetization integrity
+    triggerAd(20, async () => { 
+        // Step 2: Nest task validation and task window initialization inside ad timer callback structure
+        window.open(task.link, '_blank');
 
-      const currentTasks = user.completed_tasks ? [...user.completed_tasks] : [];
-      if (currentTasks.includes(taskIdStr)) return; 
+        const currentTasks = user.completed_tasks ? [...user.completed_tasks] : [];
+        if (currentTasks.includes(taskIdStr)) return; 
 
-      const taskReward = 0.001; 
-      const newBalance = (user.balance || 0) + taskReward;
-      const updatedCompletedTasks = [...currentTasks, taskIdStr];
+        const taskReward = 0.001; 
+        const newBalance = (user.balance || 0) + taskReward;
+        const updatedCompletedTasks = [...currentTasks, taskIdStr];
 
-      // အဆင့် (၃) - Link ပွင့်ပြီးမှ ဒေတာဘေ့စ်ထဲ Reward သိမ်းမယ်
-      setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedCompletedTasks }));
-      await supabase.from('users').update({ balance: newBalance, completed_tasks: updatedCompletedTasks }).eq('id', user.id);
-      
-      alert(`Ad Watched & Task Link Opened! +${taskReward} TON Added ✅`); 
-      setTimeout(() => fetchAllData(), 500);
+        setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedCompletedTasks }));
+        await supabase.from('users').update({ balance: newBalance, completed_tasks: updatedCompletedTasks }).eq('id', user.id);
+        
+        alert(`Task Verified! +${taskReward} TON Added ✅`); 
+        setTimeout(() => fetchAllData(), 500);
     });
   };
 
@@ -335,16 +327,6 @@ function App() {
   return (
     <div style={styles.container} onClick={handleGlobalClick}>
       
-      {/* Ad Watching Screen Overlay */}
-      {isAdWatching && (
-        <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.9)', zIndex:200, display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center', color:'#fff', padding:20}}>
-          <h2 style={{color:'#facc15'}}>📺 ကြော်ငြာကြည့်နေသည်...</h2>
-          <p style={{textAlign:'center', fontSize:14}}>ကျေးဇူးပြု၍ ကြော်ငြာ Tab သို့သွားပြီး ပြီးအောင်ကြည့်ပေးပါ။</p>
-          <div style={{fontSize:40, fontWeight:'bold', margin:'20px 0', background:'#fff', color:'#000', padding:'10px 30px', borderRadius:15}}>{adTimer}s</div>
-          <button onClick={() => window.open(currentAdUrl.current, '_blank')} style={{...styles.btn, background:'#facc15', color:'#000'}}>ကြော်ငြာပြန်ဖွင့်ရန် 🔗</button>
-        </div>
-      )}
-
       <div style={{background:'#000', color:'#fff', padding:20, borderRadius:20, textAlign:'center', marginBottom:15, border: '2px solid #fff'}}>
          <small style={{opacity:0.7}}>MY TOTAL BALANCE</small>
          <h1 style={{margin:'5px 0', fontSize:32}}>{user.balance.toFixed(5)} TON</h1>
@@ -479,7 +461,7 @@ function App() {
                 <div key={t.id} style={styles.card}>
                   <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                       <span style={{fontWeight:'bold', fontSize:14}}>{t.name}</span>
-                      <button onClick={()=>handleStartTask(t)} style={{...styles.btn, padding:'8px 15px'}}>START TASK</button>
+                      <button onClick={()=>handleStartTask(t)} style={{...styles.btn, padding:'8px 15px'}}>START</button>
                   </div>
                 </div>
             ))
@@ -572,7 +554,7 @@ function App() {
             </div>
             {withdraws.map((w,i) => (
               <div key={i} style={{...styles.card, fontSize:13}}>
-                <div style={{display:'flex', justifyContent:'space-between'}}><span>{w.amount} TON</span><span style={{color: w.status === 'Success' ? 'green' : 'orange', fontWeight:'bold'}}>{w.status}</span></div>
+                <div style={{display:'flex', justifyContent:'space-between', padding:'5px 0'}}><span>{w.amount} TON</span><span style={{color: w.status === 'Success' ? 'green' : 'orange', fontWeight:'bold'}}>{w.status}</span></div>
                 <small style={{color:'#888'}}>{new Date(w.created_at).toLocaleString()}</small>
               </div>
             ))}
