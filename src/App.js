@@ -352,6 +352,32 @@ function App() {
   return (
     <div style={styles.container} onClick={handleGlobalClick}>
       
+      {/* GLOBAL AD INTERACTION OVERLAY GLASS LAYER */}
+      {isAdWatching && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.4)',
+          backdropFilter: 'blur(4px)',
+          zIndex: 99999,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          color: '#fff',
+          fontWeight: 'bold',
+          fontSize: '18px',
+          textAlign: 'center',
+          padding: '20px'
+        }} onClick={handleGlobalClick}>
+          <div>
+            ⚠️ WATCHING ADVERTISEMENT...<br/>
+            <span style={{fontSize: '13px', color: '#facc15'}}>
+              Do not close early! Complete the timer to unlock the app and claim rewards.
+            </span>
+          </div>
+        </div>
+      )}
+
       <div style={{background:'#000', color:'#fff', padding:20, borderRadius:20, textAlign:'center', marginBottom:15, border: '2px solid #fff'}}>
          <small style={{opacity:0.7}}>MY TOTAL BALANCE</small>
          <h1 style={{margin:'5px 0', fontSize:32}}>{user.balance.toFixed(5)} TON</h1>
