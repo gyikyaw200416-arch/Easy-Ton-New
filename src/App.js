@@ -119,7 +119,7 @@ function App() {
         completed_tasks: uData.completed_tasks ? uData.completed_tasks.map(String) : []
     });
     
-    // --- UPDATED COOLDOWN TO 3 HOURS FOR LUCKY SPIN ---
+    // --- EXACT 3-HOUR TIME COOLDOWN RULE APPLIED ---
     const waitTime = 3 * 60 * 60 * 1000; 
     const diff = waitTime - (Date.now() - (uData.last_spin || 0));
     setTimeLeft(diff > 0 ? diff : 0);
@@ -161,7 +161,7 @@ function App() {
     window.open(selectedAd, '_blank');
   };
 
-  // --- STRICT COMPLIANCE EVALUATOR ---
+  // --- STRICT COMPLIANCE EVALUATOR (REDIRECTS IMMEDIATELY IF FAILS) ---
   const checkAdCompliance = useCallback(() => {
     if (!isAdWatching) return true;
 
@@ -193,6 +193,7 @@ function App() {
     }
   };
 
+  // Immediate event assessment when Telegram user refocuses app
   useEffect(() => {
     const handleFocusVerification = () => {
       if (isAdWatching) {
