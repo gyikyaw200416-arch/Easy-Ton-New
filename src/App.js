@@ -59,10 +59,10 @@ function App() {
   const [taskLink, setTaskLink] = useState('');
   const [taskType, setTaskType] = useState('bot');
 
-  // --- STRICT AD SYSTEM STATES ---
+  // --- REALTIME TIME-STAMP AD TRACKING CONFIG ---
   const [isAdWatching, setIsAdWatching] = useState(false);
   const adStartTime = useRef(0);
-  const adRequiredDuration = useRef(0);
+  const adTargetDuration = useRef(0);
   const pendingAction = useRef(null);
   const currentAdUrl = useRef(AD_LINKS[0]);
   const adToggle = useRef(0);
@@ -144,7 +144,7 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  // --- TRIGGER AD WITH REAL-TIME TRACKING ---
+  // --- INITIALIZE REAL ABSOLUTE TIME TRACKING ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
 
@@ -152,7 +152,7 @@ function App() {
     adToggle.current += 1;
     
     currentAdUrl.current = selectedAd;
-    adRequiredDuration.current = duration;
+    adTargetDuration.current = duration;
     adStartTime.current = Date.now();
     pendingAction.current = callback;
     setIsAdWatching(true);
@@ -160,50 +160,48 @@ function App() {
     window.open(selectedAd, '_blank');
   };
 
-  // --- MONITORING SYSTEM (PREVENTS SNEAKING BACK EARLY) ---
-  const checkAdStatusAndExecute = useCallback(() => {
+  // --- STRICT COMPLIANCE EVALUATOR (REDIRECTS IMMEDIATELY IF FAILS) ---
+  const checkAdCompliance = useCallback(() => {
     if (!isAdWatching) return true;
 
-    const elapsedSeconds = Math.floor((Date.now() - adStartTime.current) / 1000);
-    const remaining = adRequiredDuration.current - elapsedSeconds;
+    const secondsPassed = Math.floor((Date.now() - adStartTime.current) / 1000);
+    const timeRemaining = adTargetDuration.current - secondsPassed;
 
-    if (remaining > 0) {
-      alert(`⚠️ You must watch the advertisement for ${remaining} more seconds! Returning to Ad now...`);
+    if (timeRemaining > 0) {
+      alert(`Watch the full time ${timeRemaining}s‼️`);
       window.open(currentAdUrl.current, '_blank');
       return false;
     } else {
       setIsAdWatching(false);
       if (pendingAction.current) {
-        const actionToRun = pendingAction.current;
+        const executeCallback = pendingAction.current;
         pendingAction.current = null;
-        actionToRun();
+        executeCallback();
       }
       return true;
     }
   }, [isAdWatching]);
 
-  // Intercept any click inside the application if ad tracking is running
   const handleGlobalClick = (e) => {
     if (isAdWatching) {
-      const allowed = checkAdStatusAndExecute();
-      if (!allowed) {
+      const isCompliant = checkAdCompliance();
+      if (!isCompliant) {
         e.preventDefault();
         e.stopPropagation();
       }
     }
   };
 
-  // Track window focus: if user switches back to the app tab early, force them back
+  // Immediate event assessment when Telegram user refocuses app
   useEffect(() => {
-    const handleFocus = () => {
+    const handleFocusVerification = () => {
       if (isAdWatching) {
-        checkAdStatusAndExecute();
+        checkAdCompliance();
       }
     };
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [isAdWatching, checkAdStatusAndExecute]);
-
+    window.addEventListener('focus', handleFocusVerification);
+    return () => window.removeEventListener('focus', handleFocusVerification);
+  }, [isAdWatching, checkAdCompliance]);
 
   const handleWatchAds = () => {
     triggerAd(30, async () => {
