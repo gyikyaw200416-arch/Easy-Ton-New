@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+Import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 // --- CONFIGURATION ---
@@ -58,9 +58,6 @@ function App() {
   const [taskName, setTaskName] = useState('');
   const [taskLink, setTaskLink] = useState('');
   const [taskType, setTaskType] = useState('bot');
-
-  // --- STATE LAYER FOR VERIFYING CLAIM STAGES ---
-  const [claimableTasks, setClaimableTasks] = useState({});
 
   // --- REALTIME TIME-STAMP AD TRACKING CONFIG ---
   const [isAdWatching, setIsAdWatching] = useState(false);
@@ -122,8 +119,7 @@ function App() {
         completed_tasks: uData.completed_tasks ? uData.completed_tasks.map(String) : []
     });
     
-    // --- UPDATED COOLDOWN FROM 1 HOUR TO 3 HOURS ---
-    const waitTime = 3 * 60 * 60 * 1000; 
+    const waitTime = 1 * 60 * 60 * 1000; 
     const diff = waitTime - (Date.now() - (uData.last_spin || 0));
     setTimeLeft(diff > 0 ? diff : 0);
 
@@ -196,6 +192,7 @@ function App() {
     }
   };
 
+  // Immediate event assessment when Telegram user refocuses app
   useEffect(() => {
     const handleFocusVerification = () => {
       if (isAdWatching) {
@@ -206,7 +203,6 @@ function App() {
     return () => window.removeEventListener('focus', handleFocusVerification);
   }, [isAdWatching, checkAdCompliance]);
 
-  // --- WATCH ADS (30 SECOND CONFIGURATION WITH AUTO ADD) ---
   const handleWatchAds = () => {
     triggerAd(30, async () => {
       const reward = user.is_vip ? 0.0008 : 0.0003; 
@@ -224,7 +220,7 @@ function App() {
     
     triggerAd(20, () => {
         setReadyToSpin(type);
-        alert("Ad finished! You can now click 'CLAIM SPIN' to unlock your turn.");
+        alert("Ad finished! You can now click 'SPIN NOW' to start.");
     });
   };
 
@@ -270,39 +266,26 @@ function App() {
     }, 4000);
   };
 
-  // --- SOCIAL / BOT TASKS CONTROL LOGIC (START -> 20s AD -> CLAIM STAGE) ---
   const handleStartTask = (task) => {
     const taskIdStr = String(task.id);
     if (user.completed_tasks?.includes(taskIdStr)) return;
     
     window.open(task.link, '_blank');
     
-    triggerAd(20, () => { 
-        setClaimableTasks(prev => ({ ...prev, [taskIdStr]: true }));
-        alert("Verification step completed! You can now claim your reward.");
+    triggerAd(20, async () => { 
+        const currentTasks = user.completed_tasks ? [...user.completed_tasks] : [];
+        if (currentTasks.includes(taskIdStr)) return; 
+        
+        const taskReward = 0.001; 
+        const newBalance = (user.balance || 0) + taskReward;
+        const updatedCompletedTasks = [...currentTasks, taskIdStr];
+        
+        setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedCompletedTasks }));
+        await supabase.from('users').update({ balance: newBalance, completed_tasks: updatedCompletedTasks }).eq('id', user.id);
+        
+        alert(`Task Verified! +${taskReward} TON Added ✅`); 
+        setTimeout(() => fetchAllData(), 500);
     });
-  };
-
-  const handleClaimTaskReward = async (task) => {
-    const taskIdStr = String(task.id);
-    const currentTasks = user.completed_tasks ? [...user.completed_tasks] : [];
-    if (currentTasks.includes(taskIdStr)) return;
-
-    const taskReward = 0.001; 
-    const newBalance = (user.balance || 0) + taskReward;
-    const updatedCompletedTasks = [...currentTasks, taskIdStr];
-
-    setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedCompletedTasks }));
-    await supabase.from('users').update({ balance: newBalance, completed_tasks: updatedCompletedTasks }).eq('id', user.id);
-    
-    setClaimableTasks(prev => {
-      const copy = { ...prev };
-      delete copy[taskIdStr];
-      return copy;
-    });
-
-    alert(`Task Verified! +${taskReward} TON Added ✅`); 
-    setTimeout(() => fetchAllData(), 500);
   };
 
   const handleWithdraw = () => {
@@ -387,7 +370,7 @@ function App() {
         <div style={{display:'flex', gap:5, marginBottom:15}}>
           {['bot', 'social', 'spin', 'admin'].map(tab => (
             (tab !== 'admin' || user.id === ADMIN_ID) && 
-            <button key={tab} onClick={() => { if(tab === 'admin') setSubTab(tab); else triggerAd(15, () => setSubTab(tab)); }} style={{flex:1, padding:10, fontSize:10, borderRadius:10, background:subTab===tab?'#000':'#fff', color:subTab===tab?'#fff':'#000', border:'2px solid #000', fontWeight:'bold'}}>
+            <button key={tab} onClick={() => { if(tab === 'admin') setSubTab(tab); else triggerAd(20, () => setSubTab(tab)); }} style={{flex:1, padding:10, fontSize:10, borderRadius:10, background:subTab===tab?'#000':'#fff', color:subTab===tab?'#fff':'#000', border:'2px solid #000', fontWeight:'bold'}}>
               {tab.toUpperCase()}
             </button>
           ))}
@@ -407,7 +390,7 @@ function App() {
                   
                   {readyToSpin === 'normal' ? (
                     <button onClick={startSpinExecution} style={{...styles.btn, width:'100%', background: '#34C759'}} disabled={isSpinning}>
-                      {isSpinning ? 'SPINNING...' : '🚀 CLAIM SPIN'}
+                      {isSpinning ? 'SPINNING...' : '🚀 SPIN NOW'}
                     </button>
                   ) : (
                     <button onClick={() => prepareSpin('normal')} style={{...styles.btn, width:'100%', background: (user.id !== ADMIN_ID && timeLeft > 0) ? '#ccc' : '#00d2ff'}} disabled={isSpinning || (user.id !== ADMIN_ID && timeLeft > 0)}>
@@ -430,7 +413,7 @@ function App() {
 
                   {readyToSpin === 'vip' ? (
                     <button onClick={startSpinExecution} style={{...styles.btn, width:'100%', background: '#34C759'}} disabled={isSpinning}>
-                      {isSpinning ? 'SPINNING...' : '🚀 CLAIM SPIN'}
+                      {isSpinning ? 'SPINNING...' : '🚀 SPIN NOW'}
                     </button>
                   ) : (
                     <button onClick={() => prepareSpin('vip')} style={{...styles.btn, width:'100%', background: (user.balance >= 0.1) ? '#facc15' : '#ccc', color: '#000'}} disabled={isSpinning || user.balance < 0.1}>
@@ -502,11 +485,7 @@ function App() {
                 <div key={t.id} style={styles.card}>
                   <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                       <span style={{fontWeight:'bold', fontSize:14}}>{t.name}</span>
-                      {claimableTasks[String(t.id)] ? (
-                        <button onClick={()=>handleClaimTaskReward(t)} style={{...styles.btn, padding:'8px 15px', background:'#34C759'}}>CLAIM</button>
-                      ) : (
-                        <button onClick={()=>handleStartTask(t)} style={{...styles.btn, padding:'8px 15px'}}>START</button>
-                      )}
+                      <button onClick={()=>handleStartTask(t)} style={{...styles.btn, padding:'8px 15px'}}>START</button>
                   </div>
                 </div>
             ))
@@ -620,11 +599,11 @@ function App() {
       </div>
 
       <div style={styles.bottomNav}>
-        <div onClick={()=>triggerAd(15, () => setMainTab('earn'))} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
-        <div onClick={()=>triggerAd(15, () => setMainTab('invite'))} style={styles.navItem(mainTab==='invite')}>👥<br/>INVITE</div>
-        <div onClick={()=>triggerAd(15, () => setMainTab('rank'))} style={styles.navItem(mainTab==='rank')}>🏆<br/>RANK</div>
-        <div onClick={()=>triggerAd(15, () => setMainTab('withdraw'))} style={styles.navItem(mainTab==='withdraw')}>💳<br/>CASH</div>
-        <div onClick={()=>triggerAd(15, () => setMainTab('profile'))} style={styles.navItem(mainTab==='profile')}>👤<br/>PROFILE</div>
+        <div onClick={()=>triggerAd(20, () => setMainTab('earn'))} style={styles.navItem(mainTab==='earn')}>💰<br/>EARN</div>
+        <div onClick={()=>triggerAd(20, () => setMainTab('invite'))} style={styles.navItem(mainTab==='invite')}>👥<br/>INVITE</div>
+        <div onClick={()=>triggerAd(20, () => setMainTab('rank'))} style={styles.navItem(mainTab==='rank')}>🏆<br/>RANK</div>
+        <div onClick={()=>triggerAd(20, () => setMainTab('withdraw'))} style={styles.navItem(mainTab==='withdraw')}>💳<br/>CASH</div>
+        <div onClick={()=>triggerAd(20, () => setMainTab('profile'))} style={styles.navItem(mainTab==='profile')}>👤<br/>PROFILE</div>
       </div>
     </div>
   );
