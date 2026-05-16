@@ -201,7 +201,6 @@ function App() {
     if (!readyToSpin || isSpinning) return;
     const type = readyToSpin;
     
-    // Safety verification check for VIP Balance requirement
     if (type === 'vip' && user.balance < 0.1) {
       alert("Insufficient balance! You need 0.1 TON for a VIP spin.");
       setReadyToSpin(null);
@@ -247,29 +246,16 @@ function App() {
     }, 4000);
   };
 
-  // --- Bot/Social Task Dual Pop-up Integration ---
+  // --- Fixed Anti-Cheat Task System (Ad First, Link Later) ---
   const handleStartTask = (task) => {
     const taskIdStr = String(task.id);
     if (user.completed_tasks?.includes(taskIdStr)) return;
 
-    // 1. Open the primary task link instantly
-    window.open(task.link, '_blank');
+    // အဆင့် (၁) - အရင်ဆုံး Ad Link တစ်ခုတည်းကိုပဲ ပွင့်အောင်လုပ်ပြီး ကြည့်ခိုင်းမယ် (Popup Blocker ကျော်ရန်)
+    triggerAd(20, async () => {
+      // အဆင့် (၂) - Ad ၂၀ စက္ကန့်ပြည့်သွားပြီဆိုမှ တကယ့် Task Link ကို ပွင့်စေမယ်
+      window.open(task.link, '_blank');
 
-    // 2. Open the advertisement pop-up simultaneously (500ms staggered delay to bypass popup-blockers safely)
-    setTimeout(() => {
-      if (user.id !== ADMIN_ID) {
-        const selectedAd = AD_LINKS[adToggle.current % 2];
-        adToggle.current += 1;
-        window.open(selectedAd, '_blank');
-        
-        currentAdUrl.current = selectedAd;
-        setIsAdWatching(true);
-        setAdTimer(20); 
-      }
-    }, 500);
-
-    // 3. Queue the callback task update structure for database execution after ad countdown
-    setPendingAction(() => async () => {
       const currentTasks = user.completed_tasks ? [...user.completed_tasks] : [];
       if (currentTasks.includes(taskIdStr)) return; 
 
@@ -277,21 +263,13 @@ function App() {
       const newBalance = (user.balance || 0) + taskReward;
       const updatedCompletedTasks = [...currentTasks, taskIdStr];
 
+      // အဆင့် (၃) - Link ပွင့်ပြီးမှ ဒေတာဘေ့စ်ထဲ Reward သိမ်းမယ်
       setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedCompletedTasks }));
       await supabase.from('users').update({ balance: newBalance, completed_tasks: updatedCompletedTasks }).eq('id', user.id);
       
-      alert(`Task Verified! +${taskReward} TON Added ✅`); 
+      alert(`Ad Watched & Task Link Opened! +${taskReward} TON Added ✅`); 
       setTimeout(() => fetchAllData(), 500);
     });
-
-    if (user.id === ADMIN_ID) {
-      setTimeout(() => {
-        if (pendingAction) {
-          pendingAction();
-          setPendingAction(null);
-        }
-      }, 600);
-    }
   };
 
   const handleWithdraw = () => {
@@ -357,6 +335,16 @@ function App() {
   return (
     <div style={styles.container} onClick={handleGlobalClick}>
       
+      {/* Ad Watching Screen Overlay */}
+      {isAdWatching && (
+        <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.9)', zIndex:200, display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center', color:'#fff', padding:20}}>
+          <h2 style={{color:'#facc15'}}>📺 ကြော်ငြာကြည့်နေသည်...</h2>
+          <p style={{textAlign:'center', fontSize:14}}>ကျေးဇူးပြု၍ ကြော်ငြာ Tab သို့သွားပြီး ပြီးအောင်ကြည့်ပေးပါ။</p>
+          <div style={{fontSize:40, fontWeight:'bold', margin:'20px 0', background:'#fff', color:'#000', padding:'10px 30px', borderRadius:15}}>{adTimer}s</div>
+          <button onClick={() => window.open(currentAdUrl.current, '_blank')} style={{...styles.btn, background:'#facc15', color:'#000'}}>ကြော်ငြာပြန်ဖွင့်ရန် 🔗</button>
+        </div>
+      )}
+
       <div style={{background:'#000', color:'#fff', padding:20, borderRadius:20, textAlign:'center', marginBottom:15, border: '2px solid #fff'}}>
          <small style={{opacity:0.7}}>MY TOTAL BALANCE</small>
          <h1 style={{margin:'5px 0', fontSize:32}}>{user.balance.toFixed(5)} TON</h1>
@@ -491,7 +479,7 @@ function App() {
                 <div key={t.id} style={styles.card}>
                   <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                       <span style={{fontWeight:'bold', fontSize:14}}>{t.name}</span>
-                      <button onClick={()=>handleStartTask(t)} style={{...styles.btn, padding:'8px 15px'}}>START</button>
+                      <button onClick={()=>handleStartTask(t)} style={{...styles.btn, padding:'8px 15px'}}>START TASK</button>
                   </div>
                 </div>
             ))
