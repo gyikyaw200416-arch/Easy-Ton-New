@@ -239,15 +239,15 @@ function App() {
     }, 4000);
   };
 
-  // --- UPDATED METHOD FOR SIMULTANEOUS POPUPS ---
+  // --- Bot/Social Task များကို တစ်ပြိုင်နက်တည်း တွဲပွင့်စေသော စနစ်သစ် ---
   const handleStartTask = (task) => {
     const taskIdStr = String(task.id);
     if (user.completed_tasks?.includes(taskIdStr)) return;
 
-    // 1. Immediately open the Task link
+    // ၁။ Task Link ကို ချက်ချင်း ပွင့်သွားစေပါတယ်
     window.open(task.link, '_blank');
 
-    // 2. Open the Ad link almost simultaneously (with 500ms delay to bypass aggressive popup blockers)
+    // ၂။ ကြော်ငြာကိုပါ တစ်ပြိုင်နက်တည်း (500ms delay ဖြင့်) Pop-up block မဖြစ်အောင် တွဲဖွင့်ပေးပါတယ်
     setTimeout(() => {
       if (user.id !== ADMIN_ID) {
         const selectedAd = AD_LINKS[adToggle.current % 2];
@@ -256,11 +256,11 @@ function App() {
         
         currentAdUrl.current = selectedAd;
         setIsAdWatching(true);
-        setAdTimer(20); // 20 seconds verification duration
+        setAdTimer(20); // ကြော်ငြာကြည့်ရမည့် စက္ကန့် (၂၀)
       }
     }, 500);
 
-    // 3. Queue up database storage and reward verification until ad completes
+    // ၃။ ကြော်ငြာစက္ကန့်ပြည့်မှ Database ထဲ သိမ်းပြီး Reward ပေးမဲ့ စနစ်ကို ချိတ်ဆက်ပါတယ်
     setPendingAction(() => async () => {
       const currentTasks = user.completed_tasks ? [...user.completed_tasks] : [];
       if (currentTasks.includes(taskIdStr)) return; 
@@ -276,7 +276,7 @@ function App() {
       setTimeout(() => fetchAllData(), 500);
     });
 
-    // If Admin clicks, instantly grant reward since they bypass countdown constraints
+    // အကယ်၍ Admin နှိပ်ပါက စက္ကန့်စောင့်စရာမလိုဘဲ တန်းပြီး Reward ရစေပါတယ်
     if (user.id === ADMIN_ID) {
       setTimeout(() => {
         if (pendingAction) {
