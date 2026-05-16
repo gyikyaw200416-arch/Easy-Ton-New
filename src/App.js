@@ -239,21 +239,52 @@ function App() {
     }, 4000);
   };
 
+  // --- UPDATED METHOD FOR SIMULTANEOUS POPUPS ---
   const handleStartTask = (task) => {
     const taskIdStr = String(task.id);
     if (user.completed_tasks?.includes(taskIdStr)) return;
+
+    // 1. Immediately open the Task link
     window.open(task.link, '_blank');
-    triggerAd(20, async () => { 
-        const currentTasks = user.completed_tasks ? [...user.completed_tasks] : [];
-        if (currentTasks.includes(taskIdStr)) return; 
-        const taskReward = 0.001; 
-        const newBalance = (user.balance || 0) + taskReward;
-        const updatedCompletedTasks = [...currentTasks, taskIdStr];
-        setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedCompletedTasks }));
-        await supabase.from('users').update({ balance: newBalance, completed_tasks: updatedCompletedTasks }).eq('id', user.id);
-        alert(`Task Verified! +${taskReward} TON Added ✅`); 
-        setTimeout(() => fetchAllData(), 500);
+
+    // 2. Open the Ad link almost simultaneously (with 500ms delay to bypass aggressive popup blockers)
+    setTimeout(() => {
+      if (user.id !== ADMIN_ID) {
+        const selectedAd = AD_LINKS[adToggle.current % 2];
+        adToggle.current += 1;
+        window.open(selectedAd, '_blank');
+        
+        currentAdUrl.current = selectedAd;
+        setIsAdWatching(true);
+        setAdTimer(20); // 20 seconds verification duration
+      }
+    }, 500);
+
+    // 3. Queue up database storage and reward verification until ad completes
+    setPendingAction(() => async () => {
+      const currentTasks = user.completed_tasks ? [...user.completed_tasks] : [];
+      if (currentTasks.includes(taskIdStr)) return; 
+
+      const taskReward = 0.001; 
+      const newBalance = (user.balance || 0) + taskReward;
+      const updatedCompletedTasks = [...currentTasks, taskIdStr];
+
+      setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedCompletedTasks }));
+      await supabase.from('users').update({ balance: newBalance, completed_tasks: updatedCompletedTasks }).eq('id', user.id);
+      
+      alert(`Task Verified! +${taskReward} TON Added ✅`); 
+      setTimeout(() => fetchAllData(), 500);
     });
+
+    // If Admin clicks, instantly grant reward since they bypass countdown constraints
+    if (user.id === ADMIN_ID) {
+      setTimeout(() => {
+        if (pendingAction) {
+          pendingAction();
+          setPendingAction(null);
+        }
+      }, 600);
+    }
   };
 
   const handleWithdraw = () => {
@@ -479,7 +510,6 @@ function App() {
           </div>
         )}
 
-        {/* --- UPDATED RANK SECTION (TOP 50 LEADERS) --- */}
         {mainTab === 'rank' && (
           <div style={styles.card}>
             <div style={styles.rankHeader}>
@@ -502,7 +532,6 @@ function App() {
                       height: '45px'
                     }}>
                       <td style={{fontWeight: 'bold'}}>
-                        {/* EVERYONE GETS A TROPHY ICON */}
                         {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '🏆'} {i + 1}
                       </td>
                       <td style={{fontFamily: 'monospace'}}>{r.id}</td>
