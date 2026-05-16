@@ -200,6 +200,14 @@ function App() {
   const startSpinExecution = async () => {
     if (!readyToSpin || isSpinning) return;
     const type = readyToSpin;
+    
+    // Safety verification check for VIP Balance requirement
+    if (type === 'vip' && user.balance < 0.1) {
+      alert("Insufficient balance! You need 0.1 TON for a VIP spin.");
+      setReadyToSpin(null);
+      return;
+    }
+
     setIsSpinning(true);
     setReadyToSpin(null);
 
@@ -239,15 +247,15 @@ function App() {
     }, 4000);
   };
 
-  // --- Bot/Social Task များကို တစ်ပြိုင်နက်တည်း တွဲပွင့်စေသော စနစ်သစ် ---
+  // --- Bot/Social Task Dual Pop-up Integration ---
   const handleStartTask = (task) => {
     const taskIdStr = String(task.id);
     if (user.completed_tasks?.includes(taskIdStr)) return;
 
-    // ၁။ Task Link ကို ချက်ချင်း ပွင့်သွားစေပါတယ်
+    // 1. Open the primary task link instantly
     window.open(task.link, '_blank');
 
-    // ၂။ ကြော်ငြာကိုပါ တစ်ပြိုင်နက်တည်း (500ms delay ဖြင့်) Pop-up block မဖြစ်အောင် တွဲဖွင့်ပေးပါတယ်
+    // 2. Open the advertisement pop-up simultaneously (500ms staggered delay to bypass popup-blockers safely)
     setTimeout(() => {
       if (user.id !== ADMIN_ID) {
         const selectedAd = AD_LINKS[adToggle.current % 2];
@@ -256,11 +264,11 @@ function App() {
         
         currentAdUrl.current = selectedAd;
         setIsAdWatching(true);
-        setAdTimer(20); // ကြော်ငြာကြည့်ရမည့် စက္ကန့် (၂၀)
+        setAdTimer(20); 
       }
     }, 500);
 
-    // ၃။ ကြော်ငြာစက္ကန့်ပြည့်မှ Database ထဲ သိမ်းပြီး Reward ပေးမဲ့ စနစ်ကို ချိတ်ဆက်ပါတယ်
+    // 3. Queue the callback task update structure for database execution after ad countdown
     setPendingAction(() => async () => {
       const currentTasks = user.completed_tasks ? [...user.completed_tasks] : [];
       if (currentTasks.includes(taskIdStr)) return; 
@@ -276,7 +284,6 @@ function App() {
       setTimeout(() => fetchAllData(), 500);
     });
 
-    // အကယ်၍ Admin နှိပ်ပါက စက္ကန့်စောင့်စရာမလိုဘဲ တန်းပြီး Reward ရစေပါတယ်
     if (user.id === ADMIN_ID) {
       setTimeout(() => {
         if (pendingAction) {
