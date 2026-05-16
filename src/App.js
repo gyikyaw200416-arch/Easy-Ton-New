@@ -119,7 +119,7 @@ function App() {
         completed_tasks: uData.completed_tasks ? uData.completed_tasks.map(String) : []
     });
     
-    const waitTime = 1 * 60 * 60 * 1000; 
+    const waitTime = 3 * 60 * 60 * 1000; 
     const diff = waitTime - (Date.now() - (uData.last_spin || 0));
     setTimeLeft(diff > 0 ? diff : 0);
 
