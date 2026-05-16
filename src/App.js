@@ -59,9 +59,11 @@ function App() {
   const [taskLink, setTaskLink] = useState('');
   const [taskType, setTaskType] = useState('bot');
 
+  // --- STRICT AD SYSTEM STATES ---
   const [isAdWatching, setIsAdWatching] = useState(false);
-  const [adTimer, setAdTimer] = useState(0);
-  const [pendingAction, setPendingAction] = useState(null);
+  const adStartTime = useRef(0);
+  const adRequiredDuration = useRef(0);
+  const pendingAction = useRef(null);
   const currentAdUrl = useRef(AD_LINKS[0]);
   const adToggle = useRef(0);
 
@@ -142,39 +144,66 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
+  // --- TRIGGER AD WITH REAL-TIME TRACKING ---
   const triggerAd = (duration, callback) => {
     if (user.id === ADMIN_ID) return callback(); 
+
     const selectedAd = AD_LINKS[adToggle.current % 2];
     adToggle.current += 1;
-    window.open(selectedAd, '_blank');
+    
     currentAdUrl.current = selectedAd;
+    adRequiredDuration.current = duration;
+    adStartTime.current = Date.now();
+    pendingAction.current = callback;
     setIsAdWatching(true);
-    setAdTimer(duration);
-    setPendingAction(() => callback);
+
+    window.open(selectedAd, '_blank');
   };
 
-  const handleGlobalClick = (e) => {
-    if (isAdWatching && adTimer > 0) {
-      e.preventDefault();
-      e.stopPropagation();
-      alert(`Watch the full time ${adTimer}s‼️`);
+  // --- MONITORING SYSTEM (PREVENTS SNEAKING BACK EARLY) ---
+  const checkAdStatusAndExecute = useCallback(() => {
+    if (!isAdWatching) return true;
+
+    const elapsedSeconds = Math.floor((Date.now() - adStartTime.current) / 1000);
+    const remaining = adRequiredDuration.current - elapsedSeconds;
+
+    if (remaining > 0) {
+      alert(`⚠️ You must watch the advertisement for ${remaining} more seconds! Returning to Ad now...`);
       window.open(currentAdUrl.current, '_blank');
-    }
-  };
-
-  useEffect(() => {
-    let timer;
-    if (isAdWatching && adTimer > 0) {
-      timer = setInterval(() => setAdTimer(prev => prev - 1), 1000);
-    } else if (adTimer === 0 && isAdWatching) {
+      return false;
+    } else {
       setIsAdWatching(false);
-      if (pendingAction) {
-        pendingAction();
-        setPendingAction(null);
+      if (pendingAction.current) {
+        const actionToRun = pendingAction.current;
+        pendingAction.current = null;
+        actionToRun();
+      }
+      return true;
+    }
+  }, [isAdWatching]);
+
+  // Intercept any click inside the application if ad tracking is running
+  const handleGlobalClick = (e) => {
+    if (isAdWatching) {
+      const allowed = checkAdStatusAndExecute();
+      if (!allowed) {
+        e.preventDefault();
+        e.stopPropagation();
       }
     }
-    return () => clearInterval(timer);
-  }, [isAdWatching, adTimer, pendingAction]);
+  };
+
+  // Track window focus: if user switches back to the app tab early, force them back
+  useEffect(() => {
+    const handleFocus = () => {
+      if (isAdWatching) {
+        checkAdStatusAndExecute();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [isAdWatching, checkAdStatusAndExecute]);
+
 
   const handleWatchAds = () => {
     triggerAd(30, async () => {
@@ -243,10 +272,8 @@ function App() {
     const taskIdStr = String(task.id);
     if (user.completed_tasks?.includes(taskIdStr)) return;
     
-    // Open the targeted application task link (Telegram Bot / Channel / Group)
     window.open(task.link, '_blank');
     
-    // Trigger the mandatory 20-second ad barrier immediately afterwards
     triggerAd(20, async () => { 
         const currentTasks = user.completed_tasks ? [...user.completed_tasks] : [];
         if (currentTasks.includes(taskIdStr)) return; 
@@ -486,7 +513,6 @@ function App() {
           </div>
         )}
 
-        {/* --- UPDATED RANK SECTION (TOP 50 LEADERS) --- */}
         {mainTab === 'rank' && (
           <div style={styles.card}>
             <div style={styles.rankHeader}>
@@ -509,7 +535,6 @@ function App() {
                       height: '45px'
                     }}>
                       <td style={{fontWeight: 'bold'}}>
-                        {/* EVERYONE GETS A TROPHY ICON */}
                         {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '🏆'} {i + 1}
                       </td>
                       <td style={{fontFamily: 'monospace'}}>{r.id}</td>
