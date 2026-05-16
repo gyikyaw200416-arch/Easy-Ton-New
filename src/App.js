@@ -239,23 +239,22 @@ function App() {
     }, 4000);
   };
 
-  // --- REWORKED anti-cheat task function ---
   const handleStartTask = (task) => {
     const taskIdStr = String(task.id);
     if (user.completed_tasks?.includes(taskIdStr)) return;
-
-    // Step 1: Force Ad window execution instantly to maintain system monetization integrity
+    
+    // Open the targeted application task link (Telegram Bot / Channel / Group)
+    window.open(task.link, '_blank');
+    
+    // Trigger the mandatory 20-second ad barrier immediately afterwards
     triggerAd(20, async () => { 
-        // Step 2: Nest task validation and task window initialization inside ad timer callback structure
-        window.open(task.link, '_blank');
-
         const currentTasks = user.completed_tasks ? [...user.completed_tasks] : [];
         if (currentTasks.includes(taskIdStr)) return; 
-
+        
         const taskReward = 0.001; 
         const newBalance = (user.balance || 0) + taskReward;
         const updatedCompletedTasks = [...currentTasks, taskIdStr];
-
+        
         setUser(prev => ({ ...prev, balance: newBalance, completed_tasks: updatedCompletedTasks }));
         await supabase.from('users').update({ balance: newBalance, completed_tasks: updatedCompletedTasks }).eq('id', user.id);
         
@@ -487,6 +486,7 @@ function App() {
           </div>
         )}
 
+        {/* --- UPDATED RANK SECTION (TOP 50 LEADERS) --- */}
         {mainTab === 'rank' && (
           <div style={styles.card}>
             <div style={styles.rankHeader}>
@@ -509,6 +509,7 @@ function App() {
                       height: '45px'
                     }}>
                       <td style={{fontWeight: 'bold'}}>
+                        {/* EVERYONE GETS A TROPHY ICON */}
                         {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '🏆'} {i + 1}
                       </td>
                       <td style={{fontFamily: 'monospace'}}>{r.id}</td>
@@ -554,7 +555,7 @@ function App() {
             </div>
             {withdraws.map((w,i) => (
               <div key={i} style={{...styles.card, fontSize:13}}>
-                <div style={{display:'flex', justifyContent:'space-between', padding:'5px 0'}}><span>{w.amount} TON</span><span style={{color: w.status === 'Success' ? 'green' : 'orange', fontWeight:'bold'}}>{w.status}</span></div>
+                <div style={{display:'flex', justifyContent:'space-between'}}><span>{w.amount} TON</span><span style={{color: w.status === 'Success' ? 'green' : 'orange', fontWeight:'bold'}}>{w.status}</span></div>
                 <small style={{color:'#888'}}>{new Date(w.created_at).toLocaleString()}</small>
               </div>
             ))}
